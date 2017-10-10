@@ -633,6 +633,7 @@ sub run_qemu {
     push (@cmd, '-S') if $debug eq 'monitor';
     push (@cmd, '-s', '-S') if $debug eq 'gdb';
     push (@cmd, '-monitor', 'null') if $vga eq 'none' && $debug eq 'none';
+    push (@cmd, '-L', $ENV{"HOME"} . '/cross-tools/source/qemu-2.2.0/pc-bios/');
     run_command (@cmd);
 }
 
