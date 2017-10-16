@@ -29,6 +29,10 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+/* List of processes in THREAD_BLOCKED state, that is, processes
+   that are currently waiting for I/O or events. */
+static struct list blocked_threads;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -210,6 +214,33 @@ thread_create (const char *name, int priority,
   thread_unblock (t);
 
   return tid;
+}
+
+/* Makes the thread wait for a specific number of ticks. */
+void
+thread_wait_ticks (int64_t ticks)
+{
+  struct thread *t = thread_current ();
+  t->sleep_ticks = ticks;
+  list_push_back (&blocked_threads, &t->waitelem);
+  thread_block();
+}
+
+void
+thread_wait_update (void)
+{
+  struct list_elem *e;
+
+  for (e = list_begin (&blocked_threads); e != list_end (&blocked_threads);
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, waitelem);
+      int64_t ticks = t->sleep_ticks--;
+      if (ticks <= 0)
+      {
+        thread_unblock (t);
+      }
+    }
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled

@@ -92,8 +92,16 @@ timer_sleep (int64_t ticks)
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks)
-    thread_yield ();
+
+  if (ticks <= 0)
+  {
+    return;
+  }
+
+  // TODO: Replace this with synch.h locking?
+  enum intr_level level = intr_disable ();
+  thread_block_ticks (ticks);
+  intr_set_level (level);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -170,6 +178,7 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
+  thread_wait_update ();
   ticks++;
   thread_tick ();
 }
