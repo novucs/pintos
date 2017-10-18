@@ -100,7 +100,7 @@ timer_sleep (int64_t ticks)
 
   // TODO: Replace this with synch.h locking?
   enum intr_level level = intr_disable ();
-  thread_block_ticks (ticks);
+  thread_wait_ticks (ticks);
   intr_set_level (level);
 }
 
