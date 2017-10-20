@@ -99,6 +99,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&blocked_threads);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -239,6 +240,7 @@ thread_wait_update (void)
       if (ticks <= 0)
       {
         thread_unblock (t);
+        list_remove (e);
       }
     }
 }
