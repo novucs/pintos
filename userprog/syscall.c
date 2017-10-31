@@ -8,8 +8,9 @@
 #define ARG_1 4
 #define ARG_2 8
 #define ARG_3 12
-#define SYS_EXIT 0
+#define SYS_READ 0
 #define SYS_WRITE 1 // I have no idea what this should really be
+#define SYS_EXIT 60
 
 static void syscall_handler (struct intr_frame *);
 
@@ -69,22 +70,24 @@ static int handle_write(int fd, const void * buffer, unsigned int length)
 static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
-  int code = (int) load_stack(f, ARG_CODE);
-
-  switch (code) {
-    case SYS_EXIT:
-      handle_exit((int)load_stack(f, ARG_1));
-      break;
-    case SYS_WRITE: {
-      int result = handle_write((int) load_stack(f, ARG_1),
-                                (void *) load_stack(f, ARG_2),
-                                (unsigned int) load_stack(f, ARG_3));
-      // set return value
-      f->eax = result;
-      break;
-    }
-    default:
-      printf("SYS_CALL (%d) not implemented\n", code);
-      thread_exit ();
-  }
+  // int code = (int) load_stack(f, ARG_CODE);
+  //
+  // switch (code) {
+  //   case SYS_EXIT:
+  //     handle_exit((int)load_stack(f, ARG_1));
+  //     break;
+  //   case SYS_WRITE: {
+  //     int result = handle_write((int) load_stack(f, ARG_1),
+  //                               (void *) load_stack(f, ARG_2),
+  //                               (unsigned int) load_stack(f, ARG_3));
+  //     // set return value
+  //     f->eax = result;
+  //     break;
+  //   }
+  //   default:
+  //     printf("SYS_CALL (%d) not implemented\n", code);
+  //     thread_exit ();
+  // }
+  printf("system call!\n");
+  thread_exit ();
 }
