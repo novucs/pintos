@@ -67,7 +67,8 @@ syscall_init (void)
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
-static uint32_t load_stack(struct intr_frame *f, int offset)
+static uint32_t
+load_stack (struct intr_frame *f, int offset)
 {
   /* TODO: Add check for valid address. */
   return *((uint32_t*)(f->esp + offset));
@@ -81,12 +82,14 @@ syscall_handler (struct intr_frame *f)
   syscall_handlers[code] (f);
 }
 
-static void handle_halt (struct intr_frame *f UNUSED)
+static void
+handle_halt (struct intr_frame *f UNUSED)
 {
   printf("handle_halt\n");
 }
 
-static void handle_exit (struct intr_frame *f)
+static void
+handle_exit (struct intr_frame *f)
 {
   int status = (int) load_stack(f, ARG_1);
   struct thread * current = thread_current();
@@ -94,42 +97,50 @@ static void handle_exit (struct intr_frame *f)
   thread_exit();
 }
 
-static void handle_exec (struct intr_frame *f UNUSED)
+static void
+handle_exec (struct intr_frame *f UNUSED)
 {
   printf("handle_exec\n");
 }
 
-static void handle_wait (struct intr_frame *f UNUSED)
+static void
+handle_wait (struct intr_frame *f UNUSED)
 {
   printf("handle_wait\n");
 }
 
-static void handle_create (struct intr_frame *f UNUSED)
+static void
+handle_create (struct intr_frame *f UNUSED)
 {
   printf("handle_create\n");
 }
 
-static void handle_remove (struct intr_frame *f UNUSED)
+static void
+handle_remove (struct intr_frame *f UNUSED)
 {
   printf("handle_remove\n");
 }
 
-static void handle_open (struct intr_frame *f UNUSED)
+static void
+handle_open (struct intr_frame *f UNUSED)
 {
   printf("handle_open\n");
 }
 
-static void handle_filesize (struct intr_frame *f UNUSED)
+static void
+handle_filesize (struct intr_frame *f UNUSED)
 {
   printf("handle_filesize\n");
 }
 
-static void handle_read (struct intr_frame *f UNUSED)
+static void
+handle_read (struct intr_frame *f UNUSED)
 {
   printf("handle_read\n");
 }
 
-static void handle_write (struct intr_frame *f)
+static void
+handle_write (struct intr_frame *f)
 {
   int fd = (int) load_stack(f, ARG_1);
   const void *buffer = (void *) load_stack(f, ARG_2);
@@ -146,52 +157,62 @@ static void handle_write (struct intr_frame *f)
   f->eax = length;
 }
 
-static void handle_seek (struct intr_frame *f UNUSED)
+static void
+handle_seek (struct intr_frame *f UNUSED)
 {
   printf("handle_seek\n");
 }
 
-static void handle_tell (struct intr_frame *f UNUSED)
+static void
+handle_tell (struct intr_frame *f UNUSED)
 {
   printf("handle_tell\n");
 }
 
-static void handle_close (struct intr_frame *f UNUSED)
+static void
+handle_close (struct intr_frame *f UNUSED)
 {
   printf("handle_close\n");
 }
 
-static void handle_mmap (struct intr_frame *f UNUSED)
+static void
+handle_mmap (struct intr_frame *f UNUSED)
 {
   printf("handle_mmap\n");
 }
 
-static void handle_munmap (struct intr_frame *f UNUSED)
+static void
+handle_munmap (struct intr_frame *f UNUSED)
 {
   printf("handle_munmap\n");
 }
 
-static void handle_chdir (struct intr_frame *f UNUSED)
+static void
+handle_chdir (struct intr_frame *f UNUSED)
 {
   printf("handle_chdir\n");
 }
 
-static void handle_mkdir (struct intr_frame *f UNUSED)
+static void
+handle_mkdir (struct intr_frame *f UNUSED)
 {
   printf("handle_mkdir\n");
 }
 
-static void handle_readdir (struct intr_frame *f UNUSED)
+static void
+handle_readdir (struct intr_frame *f UNUSED)
 {
   printf("handle_readdir\n");
 }
 
-static void handle_isdir (struct intr_frame *f UNUSED)
+static void
+handle_isdir (struct intr_frame *f UNUSED)
 {
   printf("handle_isdir\n");
 }
 
-static void handle_inumber (struct intr_frame *f UNUSED)
+static void
+handle_inumber (struct intr_frame *f UNUSED)
 {
   printf("handle_inumber\n");
 }

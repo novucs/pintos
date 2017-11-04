@@ -23,7 +23,8 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-static void extract_program_name(const char *file_name_args, char * program_name);
+static void extract_program_name(const char *file_name_args,
+                                 char *program_name);
 static void free_process_info (struct thread *t);
 static bool handle_cmd_arguments(const char *args, void **esp);
 
