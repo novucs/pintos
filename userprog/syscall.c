@@ -1,6 +1,7 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include "devices/shutdown.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
@@ -85,7 +86,7 @@ syscall_handler (struct intr_frame *f)
 static void
 handle_halt (struct intr_frame *f UNUSED)
 {
-  printf("handle_halt\n");
+  shutdown_power_off();
 }
 
 static void
