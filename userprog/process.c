@@ -24,6 +24,7 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 static void extract_program_name(const char *file_name_args, char * program_name);
+static void free_process_info (struct thread *t);
 static bool handle_cmd_arguments(const char *args, void **esp);
 
 /* Starts a new thread running a user program loaded from
@@ -127,7 +128,12 @@ process_exit (void)
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
-      printf("%s: exit(%d)\n", cur->name, cur->process_info->exit_status);
+    }
+
+  if (!cur->is_kernel)
+    {
+        printf ("%s: exit(%d)\n", cur->name, cur->process_info->exit_status);
+        free_process_info(cur);
     }
 }
 
@@ -505,6 +511,20 @@ extract_program_name (const char *file_name_args, char *program_name)
     }
 
   *(program_name + pos) = '\0';
+}
+
+/* Note we really should only free this once the parent is dead!
+   However, as we are not currenlty tracking this in the parent,
+   is clearly not actually a problem. */
+static void
+free_process_info (struct thread *t)
+{
+  /* This is where we would track all the children processes and
+     kill them if necessary */
+
+  /* Free its own metadata if its parent process is dead */
+  //  if (!cur->process_info->parent_alive)
+  free (t->process_info);
 }
 
 /*
