@@ -527,14 +527,13 @@ free_process_info (struct thread *t)
   free (t->process_info);
 }
 
-/*
-  Checks whether the stack has overflown. As stacks grow from a
-  higher point in memory down, this will expect the bottom of the
-  stack to be a higher value than the top.
+/* Checks whether the stack has overflown. As stacks grow from a
+   higher point in memory down, this will expect the bottom of
+   the stack to be a higher value than the top.
 
-  BOTTOM Points to the bottom of the stack.
-  TOP Points to the top of the stack.
-  Returns true if the stack will overflow, otherwise false. */
+   BOTTOM Points to the bottom of the stack.
+   TOP Points to the top of the stack.
+   Returns true if the stack will overflow, otherwise false. */
 static bool
 has_stack_overflown(void *bottom, void *top, int size)
 {
