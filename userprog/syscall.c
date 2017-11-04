@@ -8,8 +8,6 @@
 #define ARG_1 4
 #define ARG_2 8
 #define ARG_3 12
-#define SYS_EXIT 0
-#define SYS_WRITE 1 // I have no idea what this should really be
 
 static void syscall_handler (struct intr_frame *);
 

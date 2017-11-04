@@ -17,9 +17,14 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
+
+#define MAX_PROGRAM_NAME_SIZE 16
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static void extract_program_name(const char *file_name_args, char * program_name);
+static bool handle_cmd_arguments(const char *args, void **esp);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -38,8 +43,12 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  /* Find the program name. */
+ char program_name[MAX_PROGRAM_NAME_SIZE];
+ extract_program_name(file_name, program_name);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
@@ -228,11 +237,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  char program_name[MAX_PROGRAM_NAME_SIZE];
+  extract_program_name(file_name, program_name);
+  file = filesys_open (program_name);
 
   if (file == NULL)
     {
-	printf ("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", program_name);
       goto done;
     }
 
@@ -314,6 +325,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
+
+  /* Handle arguments. */
+  if (!handle_cmd_arguments(file_name, esp))
+      goto done;
 
   success = true;
 
@@ -469,6 +484,156 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+static void
+extract_program_name (const char *file_name_args, char *program_name)
+{
+  int pos = 0;
+  int max_size = MAX_PROGRAM_NAME_SIZE - 1;
+  char char_at_pos;
+
+  while (pos < max_size)
+    {
+      char_at_pos = *(file_name_args + pos);
+
+      if (char_at_pos == ' ' || char_at_pos == '\0')
+          break;
+
+      *(program_name + pos) = char_at_pos;
+      pos++;
+    }
+
+  *(program_name + pos) = '\0';
+}
+
+/*
+  Checks whether the stack has overflown. As stacks grow from a
+  higher point in memory down, this will expect the bottom of the
+  stack to be a higher value than the top.
+
+  BOTTOM Points to the bottom of the stack.
+  TOP Points to the top of the stack.
+  Returns true if the stack will overflow, otherwise false. */
+static bool
+has_stack_overflown(void *bottom, void *top, int size)
+{
+  return (int) bottom - (int) top > size;
+}
+
+/* Push 4 bytes onto the stack, after first checking we have not
+   over run the page. */
+inline static bool
+push_bytes4(char **p_stack, void *val, void **esp)
+{
+  /* Here we are assuming 32 bit!!! */
+  if (has_stack_overflown(*esp, *p_stack - 4, PGSIZE))
+    {
+      /* Over page limit so error */
+      return false;
+    }
+
+  *p_stack -= 4;
+  *((void **)*p_stack) = val;
+
+  return true;
+}
+
+static bool
+handle_cmd_arguments(const char *args, void **esp)
+{
+  /* Top of stack. */
+  char *stack_bottom = *esp;
+  char *stack_top = *esp;
+
+  /* Scan args in reverse order and copy. */
+  char *current; /* Current position. */
+  char *start;   /* Start position for current argument. */
+  char *end;     /* End position for current argument. */
+  size_t length; /* Length of current argument. */
+
+  /* Start at the end of args. */
+  current = (char*) args + strlen(args);
+
+  /* Push arguments onto stack. */
+  while (current >= args)
+    {
+      /* Skip delimiters (i.e. ' ' or '\0'). */
+      while (current >= args && (*current == ' ' || *current == '\0'))
+        current--;
+
+      /* Set end position. */
+      end = current + 1;
+
+      /* Skip non-delimiters, i.e. actual argument. */
+      while (current >= args && *current != ' ' && *current != '\0')
+        current--;
+
+      /* Break the loop if further than the begining. */
+      if (current < args)
+        break;
+
+      /* Set begin position, length, and new top of stack. */
+      start = current + 1;
+      length = end - start;
+      stack_top -= length + 1;
+
+      /* Stop if stack will overflow. */
+      if (has_stack_overflown(stack_bottom, stack_top, PGSIZE))
+        return false;
+
+      /* Copy the read argument into the stack. */
+      strlcpy(stack_top, start, length + 1);
+      *(stack_top - 1) = '\0';
+    }
+
+  /* Save start position of arguments to use later for addresses. */
+  char *argv_start = stack_top;
+
+  /* Align the stack to the closest multiple of 4. */
+  int stack_align = ((int) stack_top) % 4;
+
+  /* Stop if stack will overflow. */
+  if (has_stack_overflown(stack_bottom, stack_top - stack_align, PGSIZE))
+    return false;
+
+  /* Zero everything in the aligned memory portion. */
+  while (stack_align > 0)
+    {
+      stack_align--;
+      stack_top--;
+      *stack_top = 0;
+    }
+
+  /* Start finding and pushing argument pointers to the stack. */
+  int argc = 0;
+  current = PHYS_BASE - 1;
+
+  while (current >= argv_start)
+    {
+      /* Find the start of the current argument. */
+      current--;
+
+      while (current >= argv_start && *current != '\0')
+        current--;
+
+      /* Push pointer for the current argument. */
+      if (!push_bytes4(&stack_top, current + 1, esp))
+        return false;
+
+      /* Increment total number of arguments. */
+      argc++;
+    }
+
+  /* Push argv, then argc, then a fake return address. Return if failed. */
+  if (!push_bytes4(&stack_top, (void*)(stack_top), esp) ||
+      !push_bytes4(&stack_top, (void*)(argc), esp) ||
+      !push_bytes4(&stack_top, (void*)NULL, esp))
+    return false;
+
+  /* We are done, so update the stack pointer. */
+  *esp = stack_top;
+  return true;
 }
 
 //--------------------------------------------------------------------
