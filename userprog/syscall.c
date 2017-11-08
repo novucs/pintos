@@ -4,6 +4,7 @@
 #include "devices/shutdown.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "userprog/process.h"
 
 #define ARG_CODE 0
 #define ARG_1 4
@@ -14,7 +15,7 @@ static uint32_t load_stack(struct intr_frame *f, int offset);
 static void syscall_handler (struct intr_frame *f UNUSED);
 static void handle_halt (struct intr_frame *f UNUSED);
 static void handle_exit (struct intr_frame *f);
-static void handle_exec (struct intr_frame *f UNUSED);
+static void handle_exec (struct intr_frame *f);
 static void handle_wait (struct intr_frame *f UNUSED);
 static void handle_create (struct intr_frame *f UNUSED);
 static void handle_remove (struct intr_frame *f UNUSED);
@@ -99,7 +100,7 @@ handle_exit (struct intr_frame *f)
 }
 
 static void
-handle_exec (struct intr_frame *f UNUSED)
+handle_exec (struct intr_frame *f)
 {
   char *buffer = (char *) load_stack(f, ARG_1);
   tid_t id = process_execute(buffer);
