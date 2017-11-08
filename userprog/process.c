@@ -571,7 +571,7 @@ handle_cmd_arguments(const char *args, void **esp)
   char *start;   /* Start position for current argument. */
   char *end;     /* End position for current argument. */
   size_t length; /* Length of current argument. */
-  int argc = 0;
+  int argc = 1;
 
   /* Start at the end of args. */
   current = (char*) args + strlen(args);
