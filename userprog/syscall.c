@@ -101,12 +101,15 @@ handle_exit (struct intr_frame *f)
 static void
 handle_exec (struct intr_frame *f UNUSED)
 {
-  printf("handle_exec\n");
+  char *buffer = (char *) load_stack(f, ARG_1);
+  tid_t id = process_execute(buffer);
+  f->eax = id;
 }
 
 static void
 handle_wait (struct intr_frame *f UNUSED)
 {
+  tid_t id = (tid_t) load_stack(f, ARG_1);
   printf("handle_wait\n");
 }
 
