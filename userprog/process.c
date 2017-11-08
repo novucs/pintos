@@ -571,6 +571,7 @@ handle_cmd_arguments(const char *args, void **esp)
   char *start;   /* Start position for current argument. */
   char *end;     /* End position for current argument. */
   size_t length; /* Length of current argument. */
+  int argc = 0;
 
   /* Start at the end of args. */
   current = (char*) args + strlen(args);
@@ -605,6 +606,7 @@ handle_cmd_arguments(const char *args, void **esp)
       /* Copy the read argument into the stack. */
       strlcpy(stack_top, start, length + 1);
       *(stack_top - 1) = '\0';
+      argc++;
     }
 
   /* Save start position of arguments to use later for addresses. */
@@ -625,8 +627,7 @@ handle_cmd_arguments(const char *args, void **esp)
       *stack_top = 0;
     }
 
-  /* Start finding and pushing argument pointers to the stack. */
-  int argc = 0;
+  /* Push argument pointers to the stack. */
   current = PHYS_BASE - 1;
 
   while (current >= argv_start)
@@ -640,9 +641,6 @@ handle_cmd_arguments(const char *args, void **esp)
       /* Push pointer for the current argument. */
       if (!push_bytes4(&stack_top, current + 1, esp))
         return false;
-
-      /* Increment total number of arguments. */
-      argc++;
     }
 
   /* Push argv, then argc, then a fake return address. Return if failed. */
