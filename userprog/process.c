@@ -571,7 +571,7 @@ handle_cmd_arguments(const char *args, void **esp)
   char *start;   /* Start position for current argument. */
   char *end;     /* End position for current argument. */
   size_t length; /* Length of current argument. */
-  int argc = 1;
+  int argc = 0;
 
   /* Start at the end of args. */
   current = (char*) args + strlen(args);
@@ -589,10 +589,6 @@ handle_cmd_arguments(const char *args, void **esp)
       /* Skip non-delimiters, i.e. actual argument. */
       while (current >= args && *current != ' ' && *current != '\0')
         current--;
-
-      /* Break the loop if further than the begining. */
-      if (current < args)
-        break;
 
       /* Set begin position, length, and new top of stack. */
       start = current + 1;
