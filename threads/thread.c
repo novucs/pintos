@@ -4,6 +4,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include "threads/malloc.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -11,7 +12,6 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
-
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -69,8 +69,8 @@ static void kernel_thread (thread_func *, void *aux);
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
-
-static void init_thread (struct thread *, const char *name, int priority);
+static void thread_init_info (struct thread *t, tid_t tid);
+static void init_thread (struct thread *, const char *name, int priority, bool is_kernel);
 
 static bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
@@ -104,7 +104,7 @@ thread_init (void)
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
 
-  init_thread (initial_thread, "main", PRI_DEFAULT);
+  init_thread (initial_thread, "main", PRI_DEFAULT, true);
 
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
@@ -118,7 +118,7 @@ thread_start (void)
   /* Create the idle thread. */
   struct semaphore idle_started;
 
-  //init_info (initial_thread, initial_thread->tid);
+  thread_init_info (initial_thread, initial_thread->tid);
 
   sema_init (&idle_started, 0);
   thread_create ("idle", PRI_MIN, idle, &idle_started);
@@ -128,6 +128,24 @@ thread_start (void)
 
   /* Wait for the idle thread to initialize idle_thread. */
   sema_down (&idle_started);
+}
+
+void
+thread_init_info (struct thread *t, tid_t tid)
+{
+  struct process_info *info = malloc (sizeof (struct process_info));
+  if (info == NULL)
+    thread_exit();
+
+  info->pid = tid;
+  info->is_alive = true;
+  info->exit_status = 0;
+
+  t->process_info = info;
+  if (t == initial_thread) return;
+
+  // we need to push this into the child list of the parent
+  // need to update the info structure for this to work
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -193,8 +211,9 @@ thread_create (const char *name, int priority,
     return TID_ERROR;
 
   /* Initialize thread. */
-  init_thread (t, name, priority);
+  init_thread (t, name, priority, false);
   tid = t->tid = allocate_tid ();
+  thread_init_info (t, tid);
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -490,7 +509,7 @@ is_thread (struct thread *t)
 /* Does basic initialization of T as a blocked thread named
    NAME. */
 static void
-init_thread (struct thread *t, const char *name, int priority)
+init_thread (struct thread *t, const char *name, int priority, bool is_kernel)
 {
   enum intr_level old_level;
 
@@ -504,8 +523,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-
-  //t->is_kernel = is_kernel;
+  t->is_kernel = is_kernel;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

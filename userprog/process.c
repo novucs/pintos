@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "threads/malloc.h"
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -20,6 +21,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static void free_process_info (struct thread *t);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -120,7 +122,11 @@ process_exit (void)
       pagedir_destroy (pd);
     }
 
-  printf ("Exiting process: %s: exit(%d)\n", cur->name, cur->status);
+  if (!cur->is_kernel)
+    {
+      printf ("%s: exit(%d)\n", cur->name, cur->process_info->exit_status);
+      free_process_info (cur);
+    }
 }
 
 /* Sets up the CPU for running user code in the current
@@ -233,8 +239,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   if (file == NULL)
     {
-	printf ("load: %s: open failed\n", file_name);
-      goto done;
+	     printf ("load: %s: open failed\n", file_name);
+       goto done;
     }
 
   /* Read and verify executable header. */
@@ -470,6 +476,20 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+/* Note we really should only free this once the parent is dead!
+   However, as we are not currenlty tracking this in the parent,
+   is clearly not actually a problem. */
+static void
+free_process_info (struct thread *t)
+{
+  /* This is where we would track all the children processes and
+     kill them if necessary */
+
+  /* Free its own metadata if its parent process is dead */
+  //  if (!cur->process_info->parent_alive)
+  free (t->process_info);
 }
 
 //--------------------------------------------------------------------
