@@ -24,6 +24,17 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+/* Metadata for process, which could be retrieved by parent process even
+   after the process exits.
+   Note, this is the very basics as no info on parent and semephores.
+*/
+struct process_info
+  {
+    bool is_alive;			  /* Whether process is alive */
+    int exit_status;			/* Record exit status */
+    int pid;				      /* Record the pid */
+  };
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -92,7 +103,8 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-
+    struct process_info *process_info; /* Metadata for a process */
+    
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */

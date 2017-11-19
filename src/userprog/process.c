@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "threads/malloc.h"
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -18,8 +19,15 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+#define MAX_PROGRAM_NAME_SIZE 16
+#define MAX_ARGS 6
+inline static bool push_bytes4(char **p_stack, void *val, void **esp);
+static bool has_stack_overflown(void *bottom, void *top, int size);
+int split_name_args_to_array(char *name_args, char* (*name_args_array)[MAX_ARGS]);
+static bool handle_cmd_arguments(const char *args, void **esp);
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+char* get_program_only(char *fn_copy);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -37,12 +45,19 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+  printf("fn_copy: %s\n", fn_copy);
+  char *prog_name = get_program_only(fn_copy);
+
+  printf("Program Name: '%s'\n", prog_name);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (prog_name, PRI_DEFAULT, start_process, fn_copy);
 
-  if (tid == TID_ERROR)
+  if (tid == TID_ERROR){
+    printf("\n!!!!! DEBUG:TID ERROR");
     palloc_free_page (fn_copy);
+  }
+  else{printf("\n!!!!! DEBUG: NO TID_ERROD");}
   return tid;
 }
 
@@ -52,6 +67,7 @@ static void
 start_process (void *file_name_)
 {
   char *file_name = file_name_;
+  printf("\n!!!!! DEBUG: In function: start_process (void *file_name_)");
   struct intr_frame if_;
   bool success;
 
@@ -119,7 +135,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }+
-    printf ("Exiting process: %s: exit(%d)\n", cur->name, cur->status);
+    printf ("\nExiting process: %s: exit(%d)\n", cur->name, cur->status);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -228,11 +244,17 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  printf("\n!!!!! DEBUG: CHECKING FILE NAME: %s", file_name);
+  char *fn_copy = malloc(strlen(file_name)+1);
+  strlcpy (fn_copy, file_name, strlen(file_name)+1);
+  printf("\n!!!!! DEBUG: CHECKING FN_COPY NAME: %s", fn_copy);
+  char *prog_name = get_program_only(fn_copy);
+  printf("\n!!!!! DEBUG: CHECKING PROG NAME: %s", prog_name);
+  file = filesys_open (prog_name);
 
   if (file == NULL)
     {
-	printf ("load: %s: open failed\n", file_name);
+	printf ("\nload: %s: open failed\n", file_name);
       goto done;
     }
 
@@ -245,7 +267,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024)
     {
-      printf ("load: %s: error loading executable\n", file_name);
+      printf ("\nload: %s: error loading executable\n", file_name);
       goto done;
     }
 
@@ -314,6 +336,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
+
+  if (!handle_cmd_arguments(file_name, esp))
+    goto done;
 
   success = true;
 
@@ -471,4 +496,137 @@ install_page (void *upage, void *kpage, bool writable)
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
 
+//--------ADDITIONAL FUNCTIONS DEFINED BELOW HERE --------------------
+/*
+Pushes 4 bytes (32 bits) to to the stack.
+p_stack = Points to top of Process Stack.
+val = 32bits to be pushed to Stack
+esp = Points to the top of the Thread Stack.
+*/
+inline static bool
+push_bytes4(char **p_stack, void *val, void **esp){
+  printf("!!!!! DEBUG: PUSHING 4 BYTES TO STACK\n");
+  /* Here we are assuming 32 bit!!! */
+  if (has_stack_overflown(*esp, *p_stack - 4, PGSIZE))
+    {
+      /* Over page limit so error */
+      return false;
+    }
+
+  *p_stack -= 4;
+  *((void **)*p_stack) = val;
+
+  return true;
+}
+
+static bool
+has_stack_overflown(void *bottom, void *top, int size){
+  printf("!!!!! DEBUG: CHECKING STACK OVERFLOW\n");
+  return (int) bottom - (int) top > size; //If size of stack is too big.. True
+}
+
+char* get_program_only(char *fn_copy){
+  char *arguments_remain = malloc(strlen(fn_copy));
+  strlcpy (arguments_remain, fn_copy, PGSIZE);
+  char *prog_name = strtok_r(arguments_remain, " ", &arguments_remain);
+  return prog_name;
+}
+
+int split_name_args_to_array(char *name_args, char* (*name_args_array)[MAX_ARGS]){
+  printf("!!!!! DEBUG: SPLITING ARGUEMENTS TO ARRAY\n");
+  char *token;
+  int arg_count = -1;
+  while ((token = strtok_r(name_args, " ", &name_args)) && (arg_count != MAX_ARGS)){
+    printf("!!!!! DEBUG: TOKEN = %s\n", token);
+    printf("!!!!! DEBUG: ARGS = %s\n", name_args);
+    arg_count++;
+    (*name_args_array)[arg_count] = malloc(strlen(token)+1);
+    strlcpy((*name_args_array)[arg_count], token, strlen(token)+1);
+    printf("!!!!! DEBUG: TOKEN COPIED TO ARRAY: %d = %s\n", arg_count, (*name_args_array)[arg_count]);
+  }
+  printf("!!!!! DEBUG: ARGUMENT 1: %s\n", (*name_args_array)[0]);
+  printf("!!!!! DEBUG: ARGUMENT 2: %s\n", (*name_args_array)[1]);
+  printf("!!!!! DEBUG: ARGUMENT 3: %s\n", (*name_args_array)[2]);
+  return arg_count;
+}
+
+static bool
+handle_cmd_arguments(const char *args, void **esp){
+  printf("\n!!!!! DEBUG: HANDLE CMD ARGS\n");
+  /* Initiates Process stack at top of Thread stack. */
+  char *stack_bottom = *esp;
+  char *stack_top = *esp;
+
+  int argc = 0;
+  char *name_args = malloc(strlen(args));
+  strlcpy (name_args, args, PGSIZE);
+
+  char *name_args_array[MAX_ARGS];
+
+  int arg_count = split_name_args_to_array(name_args, &name_args_array);
+  printf("!!!!! DEBUG: ARGUMENTS COUNTED: %d\n", arg_count);
+  printf("!!!!! DEBUG: ARGUMENT 1: %s\n", name_args_array[0]);
+  printf("!!!!! DEBUG: ARGUMENT 2: %s\n", name_args_array[1]);
+  printf("!!!!! DEBUG: ARGUMENT 3: %s\n", name_args_array[2]);
+  /* Push arguments onto stack. */
+  while (arg_count > 0){
+
+      /* Stop if stack will overflow. */
+      if (has_stack_overflown(stack_bottom, stack_top, PGSIZE)){
+        return false;
+      }
+      /* Copy the read argument into the stack. */
+      printf("\n!!!!! DEBUG: ARGUMENT TO ADD: %s\n", name_args_array[arg_count]);
+      strlcpy(stack_top, name_args_array[arg_count], strlen(name_args_array[arg_count])+1);
+      *(stack_top - 1) = '\n';
+      stack_top-=4;
+      argc++;
+      arg_count--;
+    }
+
+  /* Save start position of arguments to use later for addresses. */
+  char *argv_start = stack_top;
+
+  /* Align the stack to the closest multiple of 4. */
+  int stack_align = ((int) stack_top) % 4;
+
+  /* Stop if stack will overflow. */
+  if (has_stack_overflown(stack_bottom, stack_top - stack_align, PGSIZE))
+    return false;
+
+  /* Zero everything in the aligned memory portion. */
+  while (stack_align > 0)
+    {
+      stack_align--;
+      stack_top--;
+      *stack_top = 0;
+    }
+    hex_dump((uintptr_t) stack_bottom, stack_top, 104, true);
+  /* Push argument pointers to the stack. */
+  char *current = PHYS_BASE - 1;
+
+  while (current >= argv_start)
+    {
+      /* Find the start of the current argument. */
+      current--;
+
+      while (current >= argv_start && *current != '\0')
+        current--;
+
+      /* Push pointer for the current argument. */
+      if (!push_bytes4(&stack_top, current + 1, esp))
+        return false;
+    }
+
+  /* Push argv, then argc, then a fake return address. Return if failed. */
+  if (!push_bytes4(&stack_top, (void*)(stack_top), esp) ||
+      !push_bytes4(&stack_top, (void*)(argc), esp) ||
+      !push_bytes4(&stack_top, (void*)NULL, esp))
+    return false;
+
+  /* We are done, so update the stack pointer. */
+  *esp = stack_top;
+  hex_dump((uintptr_t) stack_bottom, stack_top, 104, true);
+  return true;
+}
 //--------------------------------------------------------------------
