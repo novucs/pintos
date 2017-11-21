@@ -136,7 +136,7 @@ process_exit (void)
   if (!cur->is_kernel)
     {
         printf ("%s: exit(%d)\n", cur->name, cur->process_info->exit_status);
-        free_process_info(cur);
+        free_process_info (cur);
     }
 }
 

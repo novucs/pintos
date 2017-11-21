@@ -280,7 +280,7 @@ thread_wait_until_process_exit (int pid)
   struct thread *current = thread_current ();
   current->waiting_on_process = pid;
   list_push_back (&blocked_until_exit_threads, &current->process_wait_elem);
-  thread_block();
+  thread_block ();
   intr_set_level (level);
 }
 
@@ -289,9 +289,9 @@ thread_notify_process_exit (int pid, int64_t exit_code)
 {
   struct list_elem *e;
 
-  for (e = list_begin(&blocked_until_exit_threads);
-       e != list_end(&blocked_until_exit_threads);
-       e = list_next(e))
+  for (e = list_begin (&blocked_until_exit_threads);
+       e != list_end (&blocked_until_exit_threads);
+       e = list_next (e))
     {
       struct thread *t = list_entry (e, struct thread, process_wait_elem);
       int waiting_pid = t->waiting_on_process;

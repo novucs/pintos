@@ -80,21 +80,21 @@ static void
 syscall_handler (struct intr_frame *f)
 {
   /* TODO: @will - Validate the provided syscall code. */
-  int code = (int) load_stack(f, ARG_CODE);
+  int code = (int) load_stack (f, ARG_CODE);
   syscall_handlers[code] (f);
 }
 
 static void
 handle_halt (struct intr_frame *f UNUSED)
 {
-  shutdown_power_off();
+  shutdown_power_off ();
 }
 
 static void
 handle_exit (struct intr_frame *f)
 {
-  int status = (int) load_stack(f, ARG_1);
-  struct thread *current = thread_current();
+  int status = (int) load_stack (f, ARG_1);
+  struct thread *current = thread_current ();
   current->process_info->exit_status = status;
   thread_exit();
 }
@@ -102,8 +102,8 @@ handle_exit (struct intr_frame *f)
 static void
 handle_exec (struct intr_frame *f)
 {
-  char *buffer = (char *) load_stack(f, ARG_1);
-  tid_t id = process_execute(buffer);
+  char *buffer = (char *) load_stack (f, ARG_1);
+  tid_t id = process_execute (buffer);
   f->eax = id;
 }
 
