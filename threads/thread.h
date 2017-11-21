@@ -102,7 +102,10 @@ struct thread
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
     struct list_elem waitelem;          /* List element for waiting threads list. */
+    struct list_elem process_wait_elem; /* List element for waiting on processes. */
     int64_t sleep_ticks;                /* Number of remaining ticks to sleep for. */
+    int waiting_on_process;           /* Process to wait on until complete. */
+    int64_t process_wait_exit_code;     /* The exit code of the process waited on. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */

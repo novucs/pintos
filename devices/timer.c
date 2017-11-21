@@ -99,9 +99,7 @@ timer_sleep (int64_t ticks)
   }
 
   // TODO: Replace this with synch.h locking?
-  enum intr_level level = intr_disable ();
   thread_wait_ticks (ticks);
-  intr_set_level (level);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be

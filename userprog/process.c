@@ -99,12 +99,11 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED)
+process_wait (tid_t child_tid)
 {
-    // FIXME: @bgaster --- quick hack to make sure processes execute!
-  for(;;) ;
-
-  return -1;
+  struct thread *current = thread_current ();
+  thread_wait_until_process_exit (child_tid);
+  return current->process_wait_exit_code;
 }
 
 /* Free the current process's resources. */
@@ -130,6 +129,9 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+
+  thread_notify_process_exit (cur->process_info->pid,
+                              cur->process_info->exit_status);
 
   if (!cur->is_kernel)
     {

@@ -94,7 +94,7 @@ static void
 handle_exit (struct intr_frame *f)
 {
   int status = (int) load_stack(f, ARG_1);
-  struct thread * current = thread_current();
+  struct thread *current = thread_current();
   current->process_info->exit_status = status;
   thread_exit();
 }
@@ -108,10 +108,12 @@ handle_exec (struct intr_frame *f)
 }
 
 static void
-handle_wait (struct intr_frame *f UNUSED)
+handle_wait (struct intr_frame *f)
 {
-  tid_t id = (tid_t) load_stack(f, ARG_1);
-  printf("handle_wait\n");
+  tid_t id = (tid_t) load_stack (f, ARG_1);
+  struct thread *current = thread_current ();
+  int exit_code = process_wait (id);
+  return exit_code;
 }
 
 static void

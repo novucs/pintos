@@ -34,6 +34,9 @@ static struct list all_list;
    that are currently waiting for I/O or events. */
 static struct list blocked_threads;
 
+/* List of threads waiting for another process to complete. */
+static struct list blocked_until_exit_threads;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -101,6 +104,7 @@ thread_init (void)
   list_init (&ready_list);
   list_init (&all_list);
   list_init (&blocked_threads);
+  list_init (&blocked_until_exit_threads);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -242,10 +246,12 @@ thread_create (const char *name, int priority,
 void
 thread_wait_ticks (int64_t ticks)
 {
+  enum intr_level level = intr_disable ();
   struct thread *t = thread_current ();
   t->sleep_ticks = ticks;
   list_push_back (&blocked_threads, &t->waitelem);
   thread_block();
+  intr_set_level (level);
 }
 
 void
@@ -259,10 +265,42 @@ thread_wait_update (void)
       struct thread *t = list_entry (e, struct thread, waitelem);
       int64_t ticks = t->sleep_ticks--;
       if (ticks <= 0)
-      {
-        thread_unblock (t);
-        list_remove (e);
-      }
+        {
+          thread_unblock (t);
+          list_remove (e);
+        }
+    }
+}
+
+/* Waits until another process has complete. */
+void
+thread_wait_until_process_exit (int pid)
+{
+  enum intr_level level = intr_disable ();
+  struct thread *current = thread_current ();
+  current->waiting_on_process = pid;
+  list_push_back (&blocked_until_exit_threads, &current->process_wait_elem);
+  thread_block();
+  intr_set_level (level);
+}
+
+void
+thread_notify_process_exit (int pid, int64_t exit_code)
+{
+  struct list_elem *e;
+
+  for (e = list_begin(&blocked_until_exit_threads);
+       e != list_end(&blocked_until_exit_threads);
+       e = list_next(e))
+    {
+      struct thread *t = list_entry (e, struct thread, process_wait_elem);
+      int waiting_pid = t->waiting_on_process;
+      if (waiting_pid == pid)
+        {
+          t->process_wait_exit_code = exit_code;
+          thread_unblock (t);
+          list_remove (e);
+        }
     }
 }
 
