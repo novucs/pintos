@@ -1,4 +1,4 @@
-/* rm.c
+/* touch.c
 
    Creates files specified on command line. */
 
