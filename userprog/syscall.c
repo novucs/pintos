@@ -22,7 +22,7 @@ static void handle_exec (struct intr_frame *f);
 static void handle_wait (struct intr_frame *f);
 static void handle_create (struct intr_frame *f);
 static void handle_remove (struct intr_frame *f);
-static void handle_open (struct intr_frame *f UNUSED);
+static void handle_open (struct intr_frame *f);
 static void handle_filesize (struct intr_frame *f UNUSED);
 static void handle_read (struct intr_frame *f UNUSED);
 static void handle_write (struct intr_frame *f);
@@ -125,7 +125,7 @@ handle_exec (struct intr_frame *f)
 static void
 handle_wait (struct intr_frame *f)
 {
-  // TODO: Add safety checks as listed in Stanford documentation.
+  /* TODO: Add safety checks as listed in Stanford documentation. */
   tid_t id = (tid_t) load_stack (f, ARG_1);
   int exit_code = process_wait (id);
   f->eax = exit_code;
@@ -154,21 +154,21 @@ handle_open (struct intr_frame *f)
   const char *file_name = (const char *) load_stack (f, ARG_1);
   struct file *file = filesys_open (file_name);
 
-  // File open was denied, return -1.
+  /* File open was denied, return -1. */
   if (file == NULL)
     {
       f->eax = -1;
       return;
     }
 
-  // Create a new file descriptor.
+  /* Create a new file descriptor. */
   struct file_descriptor *fd = malloc (sizeof (struct file_descriptor));
   fd->file = file;
   fd->id = next_fd_id++;
   fd->pid = thread_current ()->process_info->pid;
   list_push_back (&file_descriptors, &fd->list_elem);
 
-  // Return file descriptor ID.
+  /* Return file descriptor ID. */
   f->eax = fd->id;
 }
 
