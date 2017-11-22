@@ -111,6 +111,7 @@ handle_exec (struct intr_frame *f)
 static void
 handle_wait (struct intr_frame *f)
 {
+  // TODO: Add safety checks as listed in Stanford documentation.
   tid_t id = (tid_t) load_stack (f, ARG_1);
   int exit_code = process_wait (id);
   f->eax = exit_code;
