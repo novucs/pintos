@@ -114,7 +114,7 @@ handle_wait (struct intr_frame *f)
   tid_t id = (tid_t) load_stack (f, ARG_1);
   struct thread *current = thread_current ();
   int exit_code = process_wait (id);
-  return exit_code;
+  f->eax = exit_code;
 }
 
 static void
@@ -122,13 +122,16 @@ handle_create (struct intr_frame *f UNUSED)
 {
   const char *file_name = (const char *) load_stack (f, ARG_1);
   off_t initial_size = (off_t) load_stack (f, ARG_2);
-  return filesys_create (file_name, initial_size);
+  bool success = filesys_create (file_name, initial_size);
+  f->eax = success;
 }
 
 static void
 handle_remove (struct intr_frame *f UNUSED)
 {
-  printf("handle_remove\n");
+  const char *file_name = (const char *) load_stack (f, ARG_1);
+  bool success = filesys_remove (file_name);
+  f->eax = success;
 }
 
 static void
