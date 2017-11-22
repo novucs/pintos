@@ -13,13 +13,13 @@
 #define ARG_3 12
 
 static uint32_t load_stack(struct intr_frame *f, int offset);
-static void syscall_handler (struct intr_frame *f UNUSED);
+static void syscall_handler (struct intr_frame *f);
 static void handle_halt (struct intr_frame *f UNUSED);
 static void handle_exit (struct intr_frame *f);
 static void handle_exec (struct intr_frame *f);
-static void handle_wait (struct intr_frame *f UNUSED);
-static void handle_create (struct intr_frame *f UNUSED);
-static void handle_remove (struct intr_frame *f UNUSED);
+static void handle_wait (struct intr_frame *f);
+static void handle_create (struct intr_frame *f);
+static void handle_remove (struct intr_frame *f);
 static void handle_open (struct intr_frame *f UNUSED);
 static void handle_filesize (struct intr_frame *f UNUSED);
 static void handle_read (struct intr_frame *f UNUSED);
@@ -112,13 +112,12 @@ static void
 handle_wait (struct intr_frame *f)
 {
   tid_t id = (tid_t) load_stack (f, ARG_1);
-  struct thread *current = thread_current ();
   int exit_code = process_wait (id);
   f->eax = exit_code;
 }
 
 static void
-handle_create (struct intr_frame *f UNUSED)
+handle_create (struct intr_frame *f)
 {
   const char *file_name = (const char *) load_stack (f, ARG_1);
   off_t initial_size = (off_t) load_stack (f, ARG_2);
@@ -127,7 +126,7 @@ handle_create (struct intr_frame *f UNUSED)
 }
 
 static void
-handle_remove (struct intr_frame *f UNUSED)
+handle_remove (struct intr_frame *f)
 {
   const char *file_name = (const char *) load_stack (f, ARG_1);
   bool success = filesys_remove (file_name);
