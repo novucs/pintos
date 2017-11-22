@@ -5,6 +5,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "userprog/process.h"
+#include "filesys/filesys.h"
 
 #define ARG_CODE 0
 #define ARG_1 4
@@ -119,7 +120,9 @@ handle_wait (struct intr_frame *f)
 static void
 handle_create (struct intr_frame *f UNUSED)
 {
-  printf("handle_create\n");
+  const char *file_name = (const char *) load_stack (f, ARG_1);
+  off_t initial_size = (off_t) load_stack (f, ARG_2);
+  return filesys_create (file_name, initial_size);
 }
 
 static void
@@ -181,6 +184,8 @@ handle_close (struct intr_frame *f UNUSED)
 {
   printf("handle_close\n");
 }
+
+// -------------- IGNORE ALL SYSCALLS UNDER THIS LINE ---------------
 
 static void
 handle_mmap (struct intr_frame *f UNUSED)

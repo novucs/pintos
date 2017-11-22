@@ -20,3 +20,4 @@ recursor
 *.o
 *.a
 my
+touch
