@@ -240,18 +240,23 @@ handle_filesize (struct intr_frame *f)
 }
 
 static void
-handle_read (struct intr_frame *f UNUSED)
+handle_read (struct intr_frame *f)
 {
   int fd_id = (int) load_stack (f, ARG_1);
-  void *buffer = (void *) load_stack (f, ARG_2);
+  char *buffer = (char *) load_stack (f, ARG_2);
   unsigned int size = (unsigned int) load_stack (f, ARG_3);
 
   if (fd_id == 0)
   {
-
+    // TODO: Perhaps add some sort of check if address is valid?
+    for (int i = 0; i < size; i++)
+      {
+        *(buffer + i) = input_getc();
+      }
     return;
   }
 
+  int pid = thread_current ()->process_info->pid;
   struct file_descriptor *fd = find_file_descriptor (pid, fd_id);
 
   if (fd == NULL)
@@ -260,7 +265,8 @@ handle_read (struct intr_frame *f UNUSED)
       return;
     }
 
-
+  int success = file_read (fd->file, buffer, size);
+  return success;
 }
 
 static void
