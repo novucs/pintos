@@ -3,8 +3,10 @@
 #include <syscall-nr.h>
 #include "devices/shutdown.h"
 #include "threads/interrupt.h"
+#include "threads/malloc.h"
 #include "threads/thread.h"
 #include "userprog/process.h"
+#include "filesys/file.h"
 #include "filesys/filesys.h"
 
 #define ARG_CODE 0
@@ -64,9 +66,21 @@ static void (*syscall_handlers[]) (struct intr_frame *f UNUSED) =
     handle_inumber                 /* Returns the inode number for a fd. */
   };
 
+static struct file_descriptor
+  {
+    struct file *file;
+    unsigned int id;
+    struct list_elem elem;
+    int pid;
+  };
+
+static struct list file_descriptors;
+static int next_fd_id = 2;
+
 void
 syscall_init (void)
 {
+  list_init (&file_descriptors);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -135,9 +149,27 @@ handle_remove (struct intr_frame *f)
 }
 
 static void
-handle_open (struct intr_frame *f UNUSED)
+handle_open (struct intr_frame *f)
 {
-  printf("handle_open\n");
+  const char *file_name = (const char *) load_stack (f, ARG_1);
+  struct file *file = filesys_open (file_name);
+
+  // File open was denied, return -1.
+  if (file == NULL)
+    {
+      f->eax = -1;
+      return;
+    }
+
+  // Create a new file descriptor.
+  struct file_descriptor *fd = malloc (sizeof (struct file_descriptor));
+  fd->file = file;
+  fd->id = next_fd_id++;
+  fd->pid = thread_current ()->process_info->pid;
+  list_push_back (&file_descriptors, &fd->list_elem);
+
+  // Return file descriptor ID.
+  f->eax = fd->id;
 }
 
 static void
