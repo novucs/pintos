@@ -25,7 +25,7 @@ static void handle_create (struct intr_frame *f);
 static void handle_remove (struct intr_frame *f);
 static void handle_open (struct intr_frame *f);
 static void handle_filesize (struct intr_frame *f);
-static void handle_read (struct intr_frame *f UNUSED);
+static void handle_read (struct intr_frame *f);
 static void handle_write (struct intr_frame *f);
 static void handle_seek (struct intr_frame *f UNUSED);
 static void handle_tell (struct intr_frame *f UNUSED);
@@ -253,6 +253,7 @@ handle_read (struct intr_frame *f)
       {
         *(buffer + i) = input_getc();
       }
+    f->eax = size;
     return;
   }
 
@@ -265,8 +266,8 @@ handle_read (struct intr_frame *f)
       return;
     }
 
-  int success = file_read (fd->file, buffer, size);
-  return success;
+  int length = file_read (fd->file, buffer, size);
+  return length;
 }
 
 static void
