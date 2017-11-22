@@ -23,7 +23,7 @@ main (int argc, const char **argv)
         }
 
       int size = filesize(fd);
-      printf("Size of %s: %d", argv[i], size);
+      printf("Size of %s: %d\n", argv[i], size);
     }
 
   return success ? EXIT_SUCCESS : EXIT_FAILURE;

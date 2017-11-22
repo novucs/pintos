@@ -8,6 +8,7 @@
 #include "userprog/process.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "filesys/inode.h"
 
 #define ARG_CODE 0
 #define ARG_1 4
@@ -23,7 +24,7 @@ static void handle_wait (struct intr_frame *f);
 static void handle_create (struct intr_frame *f);
 static void handle_remove (struct intr_frame *f);
 static void handle_open (struct intr_frame *f);
-static void handle_filesize (struct intr_frame *f UNUSED);
+static void handle_filesize (struct intr_frame *f);
 static void handle_read (struct intr_frame *f UNUSED);
 static void handle_write (struct intr_frame *f);
 static void handle_seek (struct intr_frame *f UNUSED);
@@ -66,6 +67,37 @@ static void (*syscall_handlers[]) (struct intr_frame *f UNUSED) =
     handle_inumber                 /* Returns the inode number for a fd. */
   };
 
+
+
+/* On-disk inode.
+   Must be exactly BLOCK_SECTOR_SIZE bytes long. */
+static struct inode_disk
+  {
+    block_sector_t start;               /* First data sector. */
+    off_t length;                       /* File size in bytes. */
+    unsigned magic;                     /* Magic number. */
+    uint32_t unused[125];               /* Not used. */
+  };
+
+/* In-memory inode. */
+static struct inode
+  {
+    struct list_elem elem;              /* Element in inode list. */
+    block_sector_t sector;              /* Sector number of disk location. */
+    int open_cnt;                       /* Number of openers. */
+    bool removed;                       /* True if deleted, false otherwise. */
+    int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
+    struct inode_disk data;             /* Inode content. */
+  };
+
+/* An open file. */
+static struct file
+  {
+    struct inode *inode;        /* File's inode. */
+    off_t pos;                  /* Current position. */
+    bool deny_write;            /* Has file_deny_write() been called? */
+  };
+
 static struct file_descriptor
   {
     struct file *file;
@@ -82,6 +114,25 @@ syscall_init (void)
 {
   list_init (&file_descriptors);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+}
+
+static struct file_descriptor *
+find_file_descriptor (int pid, int fd_id)
+{
+  struct list_elem *e;
+
+  for (e = list_begin (&file_descriptors);
+       e != list_end (&file_descriptors);
+       e = list_next (e))
+    {
+      struct file_descriptor *fd = list_entry (e, struct file_descriptor, elem);
+      if (fd->pid == pid && fd->id == fd_id)
+        {
+          return fd;
+        }
+    }
+
+  return NULL;
 }
 
 static uint32_t
@@ -166,16 +217,28 @@ handle_open (struct intr_frame *f)
   fd->file = file;
   fd->id = next_fd_id++;
   fd->pid = thread_current ()->process_info->pid;
-  list_push_back (&file_descriptors, &fd->list_elem);
+  list_push_back (&file_descriptors, &fd->elem);
 
   /* Return file descriptor ID. */
   f->eax = fd->id;
 }
 
 static void
-handle_filesize (struct intr_frame *f UNUSED)
+handle_filesize (struct intr_frame *f)
 {
-  printf("handle_filesize\n");
+  int fd_id = (int) load_stack (f, ARG_1);
+  int pid = thread_current ()->process_info->pid;
+  struct file_descriptor *fd = find_file_descriptor (pid, fd_id);
+
+  // Return -1 if file descriptor invalid.
+  if (fd == NULL)
+    {
+      f->eax = -1;
+      return;
+    }
+
+  // Return size of open file, in bytes.
+  f->eax = fd->file->inode->data.length;
 }
 
 static void
