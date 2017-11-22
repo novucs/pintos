@@ -1,6 +1,7 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include "devices/input.h"
 #include "devices/shutdown.h"
 #include "threads/interrupt.h"
 #include "threads/malloc.h"
@@ -99,7 +100,7 @@ static struct file
 static struct file_descriptor
   {
     struct file *file;
-    unsigned int id;
+    int id;
     struct list_elem elem;
     int pid;
   };
@@ -244,48 +245,51 @@ handle_read (struct intr_frame *f)
 {
   int fd_id = (int) load_stack (f, ARG_1);
   char *buffer = (char *) load_stack (f, ARG_2);
-  unsigned int size = (unsigned int) load_stack (f, ARG_3);
+  int length = (int) load_stack (f, ARG_3);
+  /* TODO: Validate buffer. */
 
   if (fd_id == 0)
-  {
-    // TODO: Perhaps add some sort of check if address is valid?
-    for (int i = 0; i < size; i++)
-      {
-        *(buffer + i) = input_getc();
-      }
-    f->eax = size;
-    return;
-  }
+    {
+      for (int i = 0; i < length; i++)
+          *(buffer + i) = input_getc();
+      f->eax = length;
+      return;
+    }
 
   int pid = thread_current ()->process_info->pid;
   struct file_descriptor *fd = find_file_descriptor (pid, fd_id);
 
-  if (fd == NULL)
-    {
+  if (fd == NULL) {
       f->eax = -1;
-      return;
-    }
+  } else
+    f->eax = file_read (fd->file, buffer, length);
 
-  int length = file_read (fd->file, buffer, size);
-  return length;
+  printf("\neax: %d\n", f->eax);
 }
 
 static void
 handle_write (struct intr_frame *f)
 {
-  int fd = (int) load_stack(f, ARG_1);
-  const void *buffer = (void *) load_stack(f, ARG_2);
-  unsigned int length = (unsigned int) load_stack(f, ARG_3);
+  int fd_id = (int) load_stack(f, ARG_1);
+  const char *buffer = (char *) load_stack(f, ARG_2);
+  int length = (int) load_stack(f, ARG_3);
+  /* TODO: Validate buffer. */
 
-  /* TODO: @bgaster - Validate fd and buffer ptr. */
+  if (fd_id == STDOUT_FILENO)
+    {
+      putbuf(buffer, length);
+      f->eax = length;
+      return;
+    }
 
-  if (fd == STDOUT_FILENO) {
-    putbuf((const char *)buffer, (size_t)length);
+  int pid = thread_current ()->process_info->pid;
+  struct file_descriptor *fd = find_file_descriptor (pid, fd_id);
+
+  if (fd == NULL) {
+      f->eax = -1;
   } else
-    printf("handle_write does not support fd output\n");
-
-  /* Set return value. */
-  f->eax = length;
+    f->eax = file_write (fd->file, buffer, length);
+  printf("\neax: %d\n", f->eax);
 }
 
 static void
