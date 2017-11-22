@@ -67,8 +67,6 @@ static void (*syscall_handlers[]) (struct intr_frame *f UNUSED) =
     handle_inumber                 /* Returns the inode number for a fd. */
   };
 
-
-
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 static struct inode_disk
@@ -244,7 +242,25 @@ handle_filesize (struct intr_frame *f)
 static void
 handle_read (struct intr_frame *f UNUSED)
 {
-  printf("handle_read\n");
+  int fd_id = (int) load_stack (f, ARG_1);
+  void *buffer = (void *) load_stack (f, ARG_2);
+  unsigned int size = (unsigned int) load_stack (f, ARG_3);
+
+  if (fd_id == 0)
+  {
+
+    return;
+  }
+
+  struct file_descriptor *fd = find_file_descriptor (pid, fd_id);
+
+  if (fd == NULL)
+    {
+      f->eax = -1;
+      return;
+    }
+
+
 }
 
 static void
