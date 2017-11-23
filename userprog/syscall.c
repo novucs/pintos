@@ -337,7 +337,7 @@ handle_close (struct intr_frame *f)
 
   /* Remove file descriptor from open files. */
   file_close (fd->file);
-  list_remove (fd->elem);
+  list_remove (&fd->elem);
 }
 
 // -------------- IGNORE ALL SYSCALLS UNDER THIS LINE ---------------
