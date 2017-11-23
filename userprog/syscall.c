@@ -30,7 +30,7 @@ static void handle_read (struct intr_frame *f);
 static void handle_write (struct intr_frame *f);
 static void handle_seek (struct intr_frame *f);
 static void handle_tell (struct intr_frame *f);
-static void handle_close (struct intr_frame *f UNUSED);
+static void handle_close (struct intr_frame *f);
 static void handle_mmap (struct intr_frame *f UNUSED);
 static void handle_munmap (struct intr_frame *f UNUSED);
 static void handle_chdir (struct intr_frame *f UNUSED);
@@ -229,14 +229,14 @@ handle_filesize (struct intr_frame *f)
   int pid = thread_current ()->process_info->pid;
   struct file_descriptor *fd = find_file_descriptor (pid, fd_id);
 
-  // Return -1 if file descriptor invalid.
+  /* Return -1 if file descriptor invalid. */
   if (fd == NULL)
     {
       f->eax = -1;
       return;
     }
 
-  // Return size of open file, in bytes.
+  /* Return size of open file, in bytes. */
   f->eax = fd->file->inode->data.length;
 }
 
@@ -299,7 +299,7 @@ handle_seek (struct intr_frame *f)
 
   /* Do nothing if given invalid file descriptor. */
   if (fd == NULL)
-      return;
+    return;
 
   /* Seek position in file. */
   file_seek (fd->file, position);
@@ -314,16 +314,26 @@ handle_tell (struct intr_frame *f)
 
   /* Do nothing if given invalid file descriptor. */
   if (fd == NULL)
-      return;
+    return;
 
   /* Tell position of file. */
   f->eax = file_tell (fd->file);
 }
 
 static void
-handle_close (struct intr_frame *f UNUSED)
+handle_close (struct intr_frame *f)
 {
-  printf("handle_close\n");
+  int fd_id = (int) load_stack(f, ARG_1);
+  int pid = thread_current ()->process_info->pid;
+  struct file_descriptor *fd = find_file_descriptor (pid, fd_id);
+
+  /* Do nothing if given invalid file descriptor. */
+  if (fd == NULL)
+    return;
+
+  /* Remove file descriptor from open files. */
+  file_close (fd->file);
+  list_remove (fd->elem);
 }
 
 // -------------- IGNORE ALL SYSCALLS UNDER THIS LINE ---------------
