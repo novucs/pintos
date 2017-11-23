@@ -28,8 +28,8 @@ static void handle_open (struct intr_frame *f);
 static void handle_filesize (struct intr_frame *f);
 static void handle_read (struct intr_frame *f);
 static void handle_write (struct intr_frame *f);
-static void handle_seek (struct intr_frame *f UNUSED);
-static void handle_tell (struct intr_frame *f UNUSED);
+static void handle_seek (struct intr_frame *f);
+static void handle_tell (struct intr_frame *f);
 static void handle_close (struct intr_frame *f UNUSED);
 static void handle_mmap (struct intr_frame *f UNUSED);
 static void handle_munmap (struct intr_frame *f UNUSED);
@@ -290,12 +290,10 @@ handle_write (struct intr_frame *f)
 }
 
 static void
-handle_seek (struct intr_frame *f UNUSED)
+handle_seek (struct intr_frame *f)
 {
   int fd_id = (int) load_stack(f, ARG_1);
   int position = (int) load_stack(f, ARG_2);
-  /* TODO: Validate buffer. */
-
   int pid = thread_current ()->process_info->pid;
   struct file_descriptor *fd = find_file_descriptor (pid, fd_id);
 
@@ -308,9 +306,18 @@ handle_seek (struct intr_frame *f UNUSED)
 }
 
 static void
-handle_tell (struct intr_frame *f UNUSED)
+handle_tell (struct intr_frame *f)
 {
-  printf("handle_tell\n");
+  int fd_id = (int) load_stack(f, ARG_1);
+  int pid = thread_current ()->process_info->pid;
+  struct file_descriptor *fd = find_file_descriptor (pid, fd_id);
+
+  /* Do nothing if given invalid file descriptor. */
+  if (fd == NULL)
+      return;
+
+  /* Tell position of file. */
+  f->eax = file_tell (fd->file);
 }
 
 static void
