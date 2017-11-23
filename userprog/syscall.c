@@ -263,8 +263,6 @@ handle_read (struct intr_frame *f)
       f->eax = -1;
   } else
     f->eax = file_read (fd->file, buffer, length);
-
-  printf("\neax: %d\n", f->eax);
 }
 
 static void
@@ -289,7 +287,6 @@ handle_write (struct intr_frame *f)
       f->eax = -1;
   } else
     f->eax = file_write (fd->file, buffer, length);
-  printf("\neax: %d\n", f->eax);
 }
 
 static void
