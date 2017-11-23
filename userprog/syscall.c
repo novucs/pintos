@@ -292,7 +292,19 @@ handle_write (struct intr_frame *f)
 static void
 handle_seek (struct intr_frame *f UNUSED)
 {
-  printf("handle_seek\n");
+  int fd_id = (int) load_stack(f, ARG_1);
+  int position = (int) load_stack(f, ARG_2);
+  /* TODO: Validate buffer. */
+
+  int pid = thread_current ()->process_info->pid;
+  struct file_descriptor *fd = find_file_descriptor (pid, fd_id);
+
+  /* Do nothing if given invalid file descriptor. */
+  if (fd == NULL)
+      return;
+
+  /* Seek position in file. */
+  file_seek (fd->file, position);
 }
 
 static void
