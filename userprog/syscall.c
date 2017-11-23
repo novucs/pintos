@@ -15,6 +15,7 @@
 #define ARG_1 4
 #define ARG_2 8
 #define ARG_3 12
+#define SYSCALL_COUNT 20
 
 static uint32_t load_stack(struct intr_frame *f, int offset);
 static void syscall_handler (struct intr_frame *f);
@@ -144,9 +145,12 @@ load_stack (struct intr_frame *f, int offset)
 static void
 syscall_handler (struct intr_frame *f)
 {
-  /* TODO: @will - Validate the provided syscall code. */
+  /* Load syscall code from stack. */
   int code = (int) load_stack (f, ARG_CODE);
-  syscall_handlers[code] (f);
+
+  /* Validate syscall code and execute its relevent syscall. */
+  if (code >= 0 && code < SYSCALL_COUNT)
+    syscall_handlers[code] (f);
 }
 
 static void
