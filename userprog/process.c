@@ -28,6 +28,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name)
 {
+
   char *fn_copy;
   tid_t tid;
 
@@ -36,10 +37,14 @@ process_execute (const char *file_name)
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
+  // extract the real file name from the command line
+  char *save_ptr, *real_name;
   strlcpy (fn_copy, file_name, PGSIZE);
-
+  real_name = strtok_r(file_name, " ", &save_ptr);
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (real_name, PRI_DEFAULT, start_process, fn_copy);
+
+
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
@@ -223,6 +228,22 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
+  /*     extract  arguments
+  */
+  // create a copy of file_name and operate on it (modifying it)   char file_name_copy[100];
+
+  strlcpy(file_name_copy, file_name, 100);
+  char *argv[255];
+  int argc;
+  char *save_ptr;
+  argv[0] = strtok_r(cmd_string, " ", &save_ptr);
+  char *token;
+  argc = 1;
+  while((token = strtok_r(NULL, " ", &save_ptr))!=NULL)
+  {
+    argv[argc++] = token;
+  }
+
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -312,7 +333,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp,arg,argc))
     goto done;
 
   /* Start address. */
@@ -436,21 +457,46 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
-static bool
-setup_stack (void **esp)
+static bool setup_stack (void **esp, char **argv, int argc)
 {
-  uint8_t *kpage;
-  bool success = false;
+  uint8_t *kpage; bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success) {
-        *esp = PHYS_BASE-12;
+        *esp = PHYS_BASE;
+        int i = argc;
+// this array holds reference to differences arguments in the stack uint32_t * arr[argc];
+    while(--i >= 0)
+    {
+      *esp = *esp -(strlen(argv[i])+1)*sizeof(char); arr[i] = (uint32_t *)*esp;
+      memcpy(*esp,argv[i],strlen(argv[i])+1);
+    }
+      *esp = *esp -4;
+      (*(int *)(*esp)) = 0;//sentinel i = argc; while( --i >= 0)
+    {
+    *esp = *esp -4;//32bit
+    (*(uint32_t **)(*esp)) = arr[i];
+    }
+
+    *esp = *esp -4;
+
+    (*(uintptr_t **)(*esp)) = (*esp+4);
+
+    *esp = *esp -4;
+
+    *(int *)(*esp) = argc;
+
+    *esp = *esp -4;
+
+    (*(int *)(*esp))=0;
+
       } else
         palloc_free_page (kpage);
     }
+    hex_dump(PHYS_BASE, *esp, PHYS_BASE-(*esp), true);
   return success;
 }
 
@@ -473,5 +519,6 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
+
 
 //--------------------------------------------------------------------
