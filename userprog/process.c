@@ -40,8 +40,13 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  /* Extract the real file name from the command line. */
+  char *save_ptr;
+  char *real_name;
+  real_name = strtok_r ((char *) file_name, " ", &save_ptr);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (real_name, PRI_DEFAULT, start_process, fn_copy);
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
@@ -208,7 +213,9 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool has_stack_overflown(void *bottom, void *top, int size);
+static bool push_bytes(void **esp, void *val);
+static bool setup_stack (uint8_t *kpage, void **esp, char **argv, int argc);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -228,6 +235,23 @@ load (const char *file_name, void (**eip) (void), void **esp)
   bool success = false;
   int i;
 
+  int length = strlen (file_name) + 1;
+  char *file_name_copy = malloc (sizeof (char) * length);
+
+  if (file_name_copy == NULL)
+    goto done;
+
+  strlcpy (file_name_copy, file_name, length);
+  char *argv[255];
+  char *save_ptr;
+  argv[0] = strtok_r (file_name_copy, " ", &save_ptr);
+
+  char *token;
+  int argc = 1;
+
+  while ((token = strtok_r (NULL, " ", &save_ptr)) != NULL)
+    argv[argc++] = token;
+
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL)
@@ -235,11 +259,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (file_name_copy);
 
   if (file == NULL)
     {
-	     printf ("load: %s: open failed\n", file_name);
+	     printf ("load: %s: open failed\n", file_name_copy);
        goto done;
     }
 
@@ -315,9 +339,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
         }
     }
 
-  /* Set up stack. */
-  if (!setup_stack (esp))
+  uint8_t *kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  if (kpage == NULL)
     goto done;
+
+  /* Set up stack. */
+  if (!setup_stack (kpage, esp, argv, argc))
+    {
+      palloc_free_page (kpage);
+      goto done;
+    }
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
@@ -326,6 +357,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
+  free (file_name_copy);
   file_close (file);
   return success;
 }
@@ -441,21 +473,69 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp)
+setup_stack (uint8_t *kpage, void **esp, char **argv, int argc)
 {
-  uint8_t *kpage;
-  bool success = false;
+  /* Install page. */
+  if (!install_page(((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true))
+    return false;
 
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL)
+  /* Set the stack pointer to physical base and initialize values. */
+  *esp = PHYS_BASE;
+  int i = argc;
+  uint32_t *argv_pointers[argc];
+
+  /* Push each argument to the stack in reverse order. */
+  while(--i >= 0)
     {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success) {
-        *esp = PHYS_BASE;
-      } else
-        palloc_free_page (kpage);
+      int length = strlen (argv[i]) + 1;
+      *esp -= length * sizeof (char);
+      argv_pointers[i] = (uint32_t *) *esp;
+      memcpy(*esp, argv[i], length);
     }
-  return success;
+
+  /* Push a null argument pointer to the stack. */
+  if (!push_bytes (esp, 0)) return false;
+
+  /* Push each argument pointer to the stack. */
+  i = argc;
+  while(--i >= 0)
+    if (!push_bytes (esp, argv_pointers[i])) return false;
+
+  /* Push argv, argc and a dummy return address to the stack. */
+  void *argv_start = *esp;
+  return push_bytes (esp, (void *) argv_start) &&
+         push_bytes (esp, (void *) argc) &&
+         push_bytes (esp, (void *) NULL);
+}
+
+/* Push 4 bytes onto the stack, after first checking we have not
+   over run the page. */
+static bool
+push_bytes(void **esp, void *val)
+{
+  /* Here we are assuming 32 bit!!! */
+  if (has_stack_overflown(*esp, *esp - 4, PGSIZE))
+    {
+      /* Over page limit so error */
+      return false;
+    }
+
+  *esp -= 4;
+  *((void **)*esp) = val;
+
+  return true;
+}
+
+/* Checks whether the stack has overflown. As stacks grow from a
+   higher point in memory down, this will expect the bottom of
+   the stack to be a higher value than the top.
+   BOTTOM Points to the bottom of the stack.
+   TOP Points to the top of the stack.
+   Returns true if the stack will overflow, otherwise false. */
+static bool
+has_stack_overflown(void *bottom, void *top, int size)
+{
+  return (int) bottom - (int) top > size;
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
