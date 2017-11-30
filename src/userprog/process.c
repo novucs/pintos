@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "threads/malloc.h"
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -19,15 +18,8 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-#define MAX_PROGRAM_NAME_SIZE 16
-#define MAX_ARGS 6
-inline static bool push_bytes4(char **p_stack, void *val, void **esp);
-static bool has_stack_overflown(void *bottom, void *top, int size);
-int split_name_args_to_array(char *name_args, char* (*name_args_array)[MAX_ARGS]);
-static bool handle_cmd_arguments(const char *args, void **esp);
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-char* get_program_only(char *fn_copy);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -36,6 +28,7 @@ char* get_program_only(char *fn_copy);
 tid_t
 process_execute (const char *file_name)
 {
+  printf("\n(process_execute)- Start\n");
   char *fn_copy;
   tid_t tid;
 
@@ -45,19 +38,21 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-  printf("fn_copy: %s\n", fn_copy);
-  char *prog_name = get_program_only(fn_copy);
 
-  printf("Program Name: '%s'\n", prog_name);
+  //TASK 1: START OF ARG PASSING TASK EXTRA CODE
+  char *save_ptr, *real_name;
+  strlcpy (fn_copy, file_name, PGSIZE);
+  real_name = strtok_r((char*)file_name, " ", &save_ptr);
+  printf("\n(process_execute)- real_name = %s \n", real_name);
+  //TASK 1: END OF ARG PASSING TASK EXTRA CODE
+
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (prog_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (real_name, PRI_DEFAULT, start_process, fn_copy);
 
-  if (tid == TID_ERROR){
-    printf("\n!!!!! DEBUG:TID ERROR");
+  if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
-  }
-  else{printf("\n!!!!! DEBUG: NO TID_ERROD");}
+  printf("\n(process_execute)- Exit (tid)\n");
   return tid;
 }
 
@@ -66,8 +61,8 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
+  printf("\n(process_start)- Start\n");
   char *file_name = file_name_;
-  printf("\n!!!!! DEBUG: In function: start_process (void *file_name_)");
   struct intr_frame if_;
   bool success;
 
@@ -76,12 +71,13 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-
+  printf("\n(process_start)- call load()\n");
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success)
+    printf("\n(start_process)-Success = False \n");
     thread_exit ();
 
   /* Start the user process by simulating a return from an
@@ -116,6 +112,7 @@ process_wait (tid_t child_tid UNUSED)
 void
 process_exit (void)
 {
+  printf("\n(process_exit)- Start\n");
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
@@ -135,7 +132,7 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }+
-    printf ("\nExiting process: %s: exit(%d)\n", cur->name, cur->status);
+    printf ("Exiting process: %s: exit(%d)\n", cur->name, cur->status);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -217,7 +214,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, char **argv, int argc);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -230,6 +227,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp)
 {
+  printf("\n(load)- Start\n");
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -237,24 +235,38 @@ load (const char *file_name, void (**eip) (void), void **esp)
   bool success = false;
   int i;
 
+  //TASK 1: START OF ARG PASSING TASK CODE
+  char *argv[255];
+  int argc;
+  char *save_ptr;
+
+  //Create copy of file_name
+  char file_name_copy[100];
+  strlcpy(file_name_copy, file_name, 100);
+
+  //Extract program name from copy
+  argv[0] = strtok_r(file_name_copy, " ", &save_ptr);
+
+  char *token;
+  argc = 1;
+  while((token = strtok_r(NULL, " ", &save_ptr))!=NULL)
+   {
+     argv[argc++] = token;
+   }
+  ////TASK 1: END OF ARG PASSING TASK CODE
+
   /* Allocate and activate page directory. */
-  t->pagedir = pagedir_create ();
+  t->pagedir = pagedir_create();
   if (t->pagedir == NULL)
     goto done;
   process_activate ();
 
   /* Open executable file. */
-  printf("\n!!!!! DEBUG: CHECKING FILE NAME: %s", file_name);
-  char *fn_copy = malloc(strlen(file_name)+1);
-  strlcpy (fn_copy, file_name, strlen(file_name)+1);
-  printf("\n!!!!! DEBUG: CHECKING FN_COPY NAME: %s", fn_copy);
-  char *prog_name = get_program_only(fn_copy);
-  printf("\n!!!!! DEBUG: CHECKING PROG NAME: %s", prog_name);
-  file = filesys_open (prog_name);
+  file = filesys_open (argv[0]);//TASK1: Passing extracted file name.
 
   if (file == NULL)
     {
-	printf ("\nload: %s: open failed\n", file_name);
+	printf ("load: %s: open failed\n", file_name);
       goto done;
     }
 
@@ -267,7 +279,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024)
     {
-      printf ("\nload: %s: error loading executable\n", file_name);
+      printf ("load: %s: error loading executable\n", file_name);
       goto done;
     }
 
@@ -331,14 +343,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, argv, argc))//TASK 1: PASSING EXTRA PARAMETERS
     goto done;
 
   /* Start address. */
+  printf("\n(start_address)-Begin \n");
   *eip = (void (*) (void)) ehdr.e_entry;
-
-  if (!handle_cmd_arguments(file_name, esp))
-    goto done;
+  printf("\n(start_address)-End \n");
 
   success = true;
 
@@ -357,6 +368,7 @@ static bool install_page (void *upage, void *kpage, bool writable);
 static bool
 validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
 {
+  printf("\n(validate_segment)- Start\n");
   /* p_offset and p_vaddr must have the same page offset. */
   if ((phdr->p_offset & PGMASK) != (phdr->p_vaddr & PGMASK))
     return false;
@@ -394,6 +406,7 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
     return false;
 
   /* It's okay. */
+  printf("\n(validate_segment)- Exit\n");
   return true;
 }
 
@@ -415,6 +428,7 @@ static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
+  printf("\n(load_segment)- Start\n");
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
@@ -453,26 +467,52 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
     }
+  printf("\n(load_segment)- Exit (true)\n");
   return true;
 }
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
-static bool
-setup_stack (void **esp)
-{
-  uint8_t *kpage;
-  bool success = false;
 
+static bool setup_stack (void **esp, char **argv, int argc)//TASK 1: EXTRA PARAMETERS
+{
+  printf("\n(setup_stack)- Start\n");
+  uint8_t *kpage; bool success = false;
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL)
-    {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success) {
-        *esp = PHYS_BASE - 12;
-      } else
-        palloc_free_page (kpage);
-    }
+  {
+    success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+    if (success) {
+      *esp = PHYS_BASE;
+      int i = argc;
+      // this array holds reference to differences arguments in the stack
+      uint32_t * arr[argc];
+
+      //TASK 1: START OF ARG PASSING TASK EXTRA CODE
+      while(--i >= 0)
+      {
+        *esp = *esp - (strlen(argv[i])+1)*sizeof(char); arr[i] = (uint32_t *)*esp;
+        memcpy(*esp,argv[i],strlen(argv[i])+1);
+      }
+        *esp = *esp - 4;
+        (*(int *)(*esp)) = 0;//sentinel i = argc; while( --i >= 0)
+      {
+        *esp = *esp - 4;//32bit
+        (*(uint32_t **)(*esp)) = arr[i];
+      }
+        *esp = *esp - 4;
+        (*(uintptr_t **)(*esp)) = (*esp+4);
+        *esp = *esp - 4;
+        *(int *)(*esp) = argc;
+        *esp = *esp - 4;
+        (*(int *)(*esp))=0;
+    //TASK 1: END OF ARG PASSING TASK EXTRA CODE
+    }else
+    palloc_free_page (kpage);
+  }
+
+  hex_dump((uintptr_t)PHYS_BASE, *esp, PHYS_BASE-(*esp), true);
+  printf("\n(setup_stack)- Exit (success)\n");
   return success;
 }
 
@@ -496,137 +536,4 @@ install_page (void *upage, void *kpage, bool writable)
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
 
-//--------ADDITIONAL FUNCTIONS DEFINED BELOW HERE --------------------
-/*
-Pushes 4 bytes (32 bits) to to the stack.
-p_stack = Points to top of Process Stack.
-val = 32bits to be pushed to Stack
-esp = Points to the top of the Thread Stack.
-*/
-inline static bool
-push_bytes4(char **p_stack, void *val, void **esp){
-  printf("!!!!! DEBUG: PUSHING 4 BYTES TO STACK\n");
-  /* Here we are assuming 32 bit!!! */
-  if (has_stack_overflown(*esp, *p_stack - 4, PGSIZE))
-    {
-      /* Over page limit so error */
-      return false;
-    }
-
-  *p_stack -= 4;
-  *((void **)*p_stack) = val;
-
-  return true;
-}
-
-static bool
-has_stack_overflown(void *bottom, void *top, int size){
-  printf("!!!!! DEBUG: CHECKING STACK OVERFLOW\n");
-  return (int) bottom - (int) top > size; //If size of stack is too big.. True
-}
-
-char* get_program_only(char *fn_copy){
-  char *arguments_remain = malloc(strlen(fn_copy));
-  strlcpy (arguments_remain, fn_copy, PGSIZE);
-  char *prog_name = strtok_r(arguments_remain, " ", &arguments_remain);
-  return prog_name;
-}
-
-int split_name_args_to_array(char *name_args, char* (*name_args_array)[MAX_ARGS]){
-  printf("!!!!! DEBUG: SPLITING ARGUEMENTS TO ARRAY\n");
-  char *token;
-  int arg_count = -1;
-  while ((token = strtok_r(name_args, " ", &name_args)) && (arg_count != MAX_ARGS)){
-    printf("!!!!! DEBUG: TOKEN = %s\n", token);
-    printf("!!!!! DEBUG: ARGS = %s\n", name_args);
-    arg_count++;
-    (*name_args_array)[arg_count] = malloc(strlen(token)+1);
-    strlcpy((*name_args_array)[arg_count], token, strlen(token)+1);
-    printf("!!!!! DEBUG: TOKEN COPIED TO ARRAY: %d = %s\n", arg_count, (*name_args_array)[arg_count]);
-  }
-  printf("!!!!! DEBUG: ARGUMENT 1: %s\n", (*name_args_array)[0]);
-  printf("!!!!! DEBUG: ARGUMENT 2: %s\n", (*name_args_array)[1]);
-  printf("!!!!! DEBUG: ARGUMENT 3: %s\n", (*name_args_array)[2]);
-  return arg_count;
-}
-
-static bool
-handle_cmd_arguments(const char *args, void **esp){
-  printf("\n!!!!! DEBUG: HANDLE CMD ARGS\n");
-  /* Initiates Process stack at top of Thread stack. */
-  char *stack_bottom = *esp;
-  char *stack_top = *esp;
-
-  int argc = 0;
-  char *name_args = malloc(strlen(args));
-  strlcpy (name_args, args, PGSIZE);
-
-  char *name_args_array[MAX_ARGS];
-
-  int arg_count = split_name_args_to_array(name_args, &name_args_array);
-  printf("!!!!! DEBUG: ARGUMENTS COUNTED: %d\n", arg_count);
-  printf("!!!!! DEBUG: ARGUMENT 1: %s\n", name_args_array[0]);
-  printf("!!!!! DEBUG: ARGUMENT 2: %s\n", name_args_array[1]);
-  printf("!!!!! DEBUG: ARGUMENT 3: %s\n", name_args_array[2]);
-  /* Push arguments onto stack. */
-  while (arg_count > 0){
-
-      /* Stop if stack will overflow. */
-      if (has_stack_overflown(stack_bottom, stack_top, PGSIZE)){
-        return false;
-      }
-      /* Copy the read argument into the stack. */
-      printf("\n!!!!! DEBUG: ARGUMENT TO ADD: %s\n", name_args_array[arg_count]);
-      strlcpy(stack_top, name_args_array[arg_count], strlen(name_args_array[arg_count])+1);
-      *(stack_top - 1) = '\n';
-      stack_top-=4;
-      argc++;
-      arg_count--;
-    }
-
-  /* Save start position of arguments to use later for addresses. */
-  char *argv_start = stack_top;
-
-  /* Align the stack to the closest multiple of 4. */
-  int stack_align = ((int) stack_top) % 4;
-
-  /* Stop if stack will overflow. */
-  if (has_stack_overflown(stack_bottom, stack_top - stack_align, PGSIZE))
-    return false;
-
-  /* Zero everything in the aligned memory portion. */
-  while (stack_align > 0)
-    {
-      stack_align--;
-      stack_top--;
-      *stack_top = 0;
-    }
-    hex_dump((uintptr_t) stack_bottom, stack_top, 104, true);
-  /* Push argument pointers to the stack. */
-  char *current = PHYS_BASE - 1;
-
-  while (current >= argv_start)
-    {
-      /* Find the start of the current argument. */
-      current--;
-
-      while (current >= argv_start && *current != '\0')
-        current--;
-
-      /* Push pointer for the current argument. */
-      if (!push_bytes4(&stack_top, current + 1, esp))
-        return false;
-    }
-
-  /* Push argv, then argc, then a fake return address. Return if failed. */
-  if (!push_bytes4(&stack_top, (void*)(stack_top), esp) ||
-      !push_bytes4(&stack_top, (void*)(argc), esp) ||
-      !push_bytes4(&stack_top, (void*)NULL, esp))
-    return false;
-
-  /* We are done, so update the stack pointer. */
-  *esp = stack_top;
-  hex_dump((uintptr_t) stack_bottom, stack_top, 104, true);
-  return true;
-}
 //--------------------------------------------------------------------

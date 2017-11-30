@@ -4,7 +4,6 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
-#include "threads/malloc.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -12,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -65,7 +65,7 @@ static void kernel_thread (thread_func *, void *aux);
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
-void thread_init_info (struct thread *t, tid_t tid);
+
 static void init_thread (struct thread *, const char *name, int priority);
 
 static bool is_thread (struct thread *) UNUSED;
@@ -90,7 +90,6 @@ static tid_t allocate_tid (void);
 void
 thread_init (void)
 {
-  printf("\n!!!!! DEBUG: In function: thread_init(void)");
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
@@ -111,11 +110,10 @@ thread_init (void)
 void
 thread_start (void)
 {
-  printf("\n!!!!! DEBUG: In function: thread_start(void)");
   /* Create the idle thread. */
   struct semaphore idle_started;
 
-  thread_init_info (initial_thread, initial_thread->tid);
+  //init_info (initial_thread, initial_thread->tid);
 
   sema_init (&idle_started, 0);
   thread_create ("idle", PRI_MIN, idle, &idle_started);
@@ -125,25 +123,6 @@ thread_start (void)
 
   /* Wait for the idle thread to initialize idle_thread. */
   sema_down (&idle_started);
-}
-
-void
-thread_init_info (struct thread *t, tid_t tid)
-{
-  struct process_info *info = malloc (sizeof (struct process_info));
-  if (info == NULL) {
-    thread_exit();
-  }
-
-  info->pid = tid;
-  info->is_alive = true;
-  info->exit_status = 0;
-
-  t->process_info = info;
-  if (t == initial_thread) return;
-
-  // we need to push this into the child list of the parent
-  // need to update the info structure for this to work
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -172,7 +151,7 @@ thread_tick (void)
 void
 thread_print_stats (void)
 {
-  printf ("\nThread: %lld idle ticks, %lld kernel ticks, %lld user ticks\n",
+  printf ("Thread: %lld idle ticks, %lld kernel ticks, %lld user ticks\n",
           idle_ticks, kernel_ticks, user_ticks);
 }
 
@@ -195,7 +174,6 @@ tid_t
 thread_create (const char *name, int priority,
                thread_func *function, void *aux)
 {
-  printf("\n!!!!! DEBUG: In function: thread_init(void)");
   struct thread *t;
   struct kernel_thread_frame *kf;
   struct switch_entry_frame *ef;
