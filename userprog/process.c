@@ -42,6 +42,8 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
   real_name = strtok_r(file_name, " ", &save_ptr);
   /* Create a new thread to execute FILE_NAME. */
+
+
   tid = thread_create (real_name, PRI_DEFAULT, start_process, fn_copy);
 
 
@@ -209,7 +211,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, char **argv, int argc);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -228,15 +230,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
+  char file_name_copy[100];
   /*     extract  arguments
   */
-  // create a copy of file_name and operate on it (modifying it)   char file_name_copy[100];
+  // create a copy of file_name and operate on it (modifying it)
 
   strlcpy(file_name_copy, file_name, 100);
   char *argv[255];
   int argc;
   char *save_ptr;
-  argv[0] = strtok_r(cmd_string, " ", &save_ptr);
+  argv[0] = strtok_r(*file_name, " ", &save_ptr);
   char *token;
   argc = 1;
   while((token = strtok_r(NULL, " ", &save_ptr))!=NULL)
@@ -333,7 +336,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp,arg,argc))
+  if (!setup_stack (esp,argv,argc))
     goto done;
 
   /* Start address. */
@@ -468,7 +471,8 @@ static bool setup_stack (void **esp, char **argv, int argc)
       if (success) {
         *esp = PHYS_BASE;
         int i = argc;
-// this array holds reference to differences arguments in the stack uint32_t * arr[argc];
+// this array holds reference to differences arguments in the stack
+    uint32_t * arr[argc];
     while(--i >= 0)
     {
       *esp = *esp -(strlen(argv[i])+1)*sizeof(char); arr[i] = (uint32_t *)*esp;
