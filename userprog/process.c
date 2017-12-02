@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#define DEBUG_MODE
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -58,6 +59,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
+
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -99,7 +101,7 @@ process_wait (tid_t child_tid UNUSED)
 {
     // FIXME: @bgaster --- quick hack to make sure processes execute!
   for(;;) ;
- // printf("%s: exit(%d)\n",child_tid, UNUSED );
+ //printf("%s: exit(%d)\n",child_tid, UNUSED );
 
   return -1;
 
@@ -224,6 +226,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp)
 {
+
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -236,10 +239,15 @@ load (const char *file_name, void (**eip) (void), void **esp)
   // create a copy of file_name and operate on it (modifying it)
 
   strlcpy(file_name_copy, file_name, 100);
+
   char *argv[255];
   int argc;
   char *save_ptr;
-  argv[0] = strtok_r(*file_name, " ", &save_ptr);
+
+
+  argv[0] = strtok_r(file_name, " ", &save_ptr);
+
+
   char *token;
   argc = 1;
   while((token = strtok_r(NULL, " ", &save_ptr))!=NULL)
@@ -359,6 +367,7 @@ static bool install_page (void *upage, void *kpage, bool writable);
 static bool
 validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
 {
+
   /* p_offset and p_vaddr must have the same page offset. */
   if ((phdr->p_offset & PGMASK) != (phdr->p_vaddr & PGMASK))
     return false;
@@ -417,6 +426,7 @@ static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
+
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
@@ -462,6 +472,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
    user virtual memory. */
 static bool setup_stack (void **esp, char **argv, int argc)
 {
+
   uint8_t *kpage; bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
@@ -479,7 +490,9 @@ static bool setup_stack (void **esp, char **argv, int argc)
       memcpy(*esp,argv[i],strlen(argv[i])+1);
     }
       *esp = *esp -4;
-      (*(int *)(*esp)) = 0;//sentinel i = argc; while( --i >= 0)
+      (*(int *)(*esp)) = 0;//setinel
+      i = argc;
+      while( --i >= 0)
     {
     *esp = *esp -4;//32bit
     (*(uint32_t **)(*esp)) = arr[i];
