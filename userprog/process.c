@@ -29,20 +29,20 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name)
 {
-  printf("after line 32\n");
+
   char *fn_copy;
   tid_t tid;
   char *save_ptr, *real_name;
-  printf("after line 36\n");
-  strlcpy (fn_copy, file_name, PGSIZE);
-  printf("after line 38\n");
+
+
+
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
 
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
-
+  strlcpy (fn_copy, file_name, PGSIZE);
   // extract the real file name from the command line
 
   real_name = strtok_r(file_name, " ", &save_ptr);
@@ -474,69 +474,38 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
-   static bool setup_stack (void **esp, char **argv, int argc)
-   {
-     uint8_t *kpage; bool success = false;
-
-     kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-     if (kpage != NULL)
-       {
-         success = install_page(((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-
-         if (success)
-           {
-             *esp = PHYS_BASE;
-             uint32_t *arr[argc];
-             int i = argc;
-
-             // Write arguments to stack in reverse order.
-             while(--i >= 0)
-               {
-                 // Get string length (including null terminator) and decrement
-                 // stack pointer.
-                 int length = strlen(argv[i]) + 1;
-                 *esp -= length * sizeof(char);
-
-                 // Write argument to position in memory.
-                 memcpy(*esp, argv[i], length);
-
-                 // Add argument pointer to cache, to be added to stack later.
-                 arr[i] = (uint32_t *) *esp;
-               }
-
-             // Write word-align.
-             int align = (int)(*esp) % 4;
-             *esp -= align;
-
-             // Write final argument as null pointer.
-             *esp -= 4;
-             (*(int *)(*esp)) = 0;
-
-             // Write each argument to stack.
-             i = argc;
-             while (--i >= 0)
-               {
-                 *esp -= 4;
-                 (*(uint32_t **)(*esp)) = arr[i];
-               }
-
-             // Write location of first argument.
-             *esp -= 4;
-             (*(uintptr_t **)(*esp)) = *esp + 4;
-
-             // Write argc.
-             *esp -= 4;
-             *(int *)(*esp) = argc;
-
-             // Write a dummy return address.
-             *esp -= 4;
-             (*(int *)(*esp)) = 0;
-           }
-         else
-           palloc_free_page (kpage);
+   static bool setup_stack (void **esp, char **argv, int argc){
+    uint8_t *kpage; bool success = false;
+    kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+    if(kpage != NULL){
+    success = install_page(((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+    if(success){
+      *esp = PHYS_BASE; 
+      int i = argc;
+// this array holds reference to differences arguments in the stack
+uint32_t * arr[argc];
+while(--i >= 0) {
+*esp = *esp -(strlen(argv[i])+1)*sizeof(char);
+arr[i] = (uint32_t *)*esp;
+memcpy(*esp,argv[i],strlen(argv[i])+1);
+}
+*esp = *esp -4;
+(*(int *)(*esp)) = 0;//sentinel
+i = argc;
+while(--i >= 0) {
+*esp = *esp -4;//32bit
+(*(uint32_t **)(*esp)) = arr[i];
+}
+*esp = *esp -4;
+(*(uintptr_t  **)(*esp)) = (*esp+4);
+*esp = *esp -4;
+*(int *)(*esp) = argc;
+*esp = *esp -4;
+(*(int *)(*esp))=0;
+    }else
+      palloc_free_page (kpage);
        }
-
-     hex_dump(PHYS_BASE, *esp, PHYS_BASE-(*esp), true);
+     hex_dump(*esp, *esp, PHYS_BASE-(*esp), true);
      return success;
    }
 /* Adds a mapping from user virtual address UPAGE to kernel
