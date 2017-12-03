@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -33,6 +34,28 @@ struct process_info
     bool is_alive;			  /* Whether process is alive */
     int exit_status;			/* Record exit status */
     int pid;				      /* Record the pid */
+  };
+
+/* Used by syscall.c. */
+struct lock filesys_lock;
+
+struct process_file
+  {
+    struct file *file;
+    int fd;
+    struct list_elem elem;
+  };
+
+struct child_process
+  {
+    int pid;
+    int load;
+    bool wait;
+    bool exit;
+    int status;
+    struct semaphore load_sema;
+    struct semaphore exit_sema;
+    struct list_elem elem;
   };
 
 /* A kernel thread or user process.
@@ -115,6 +138,17 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+    /* Needed for file system sys calls. */
+    struct list file_list;
+    int fd;
+
+    /* Needed for wait / exec sys calls. */
+    struct list child_list;
+    tid_t parent;
+
+    /* Points to child_process struct in parent's child list. */
+    struct child_process* child;
   };
 
 /* If false (default), use round-robin scheduler.
