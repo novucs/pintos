@@ -4,6 +4,11 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+#define ARG_CODE 0
+#define ARG_1 4
+#define ARG_2 8
+#define ARG_3 12
+
 static void syscall_handler (struct intr_frame *);
 
 void
@@ -12,10 +17,50 @@ syscall_init (void)
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
+static uint32_t
+load_stack(struct intr_frame *f, int offset)
+{
+  return *((uint32_t*)(f->esp + offset));
+}
 
 static void
-syscall_handler (struct intr_frame *f UNUSED)
+handle_exit(int status)
 {
-  printf ("system call!\n");
-  thread_exit ();
+  struct thread * current = thread_current();
+  current->process_info->exit_status = status;
+  thread_exit();
+}
+
+static int
+handle_write(int fd, const void * buffer, unsigned int length)
+{
+  if (fd == STDOUT_FILENO) {
+    putbuf((const char *)buffer, (size_t)length);
+  } else
+    printf("handle_write does not support fd output\n");
+
+  return length;
+}
+
+static void
+syscall_handler (struct intr_frame *f)
+{
+  int code = (int)load_stack(f, ARG_CODE);
+
+  switch (code) {
+    case SYS_EXIT:
+      handle_exit((int)load_stack(f,ARG_1));
+      break;
+    case SYS_WRITE:
+      {
+        int result = handle_write((int)load_stack(f,ARG_1),
+                                  (void *)load_stack(f, ARG_2),
+                                  (unsigned int)load_stack(f, ARG_3));
+        f->eax = result;
+        break;
+      }
+    default:
+      printf("SYS_CALL (%d) not implemented\n", code);
+      thread_exit ();
+  }
 }
