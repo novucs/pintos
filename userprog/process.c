@@ -50,6 +50,9 @@ process_execute (const char *file_name)
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
+
+  struct child_process* child = process_get_child(tid);
+  sema_down(&child->exit_sema);
   return tid;
 }
 
@@ -69,6 +72,7 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
 
   success = load (file_name, &if_.eip, &if_.esp);
+  sema_up (&thread_current ()->child->load_sema);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -95,12 +99,109 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED)
+process_wait (tid_t child_tid)
 {
-    // FIXME: @bgaster --- quick hack to make sure processes execute!
-  for(;;) ;
+  struct child_process* child = process_get_child (child_tid);
 
-  return -1;
+  if (child == NULL || child->wait)
+    return PID_ERROR;
+
+  child->wait = true;
+
+  if (!child->exit)
+    sema_down (&child->exit_sema);
+
+  int status = child->status;
+  process_remove_child (child);
+  return status;
+}
+
+/* Creates a new child process. Used by thread.c create_thread() to
+   initialise the struct child element of the struct thread. */
+struct child_process *
+process_add_child (int pid)
+{
+  struct child_process* child = malloc (sizeof (struct child_process));
+
+  if (child == NULL)
+    return NULL;
+
+  child->id = pid;
+  child->wait = false;
+  child->exit = false;
+
+  sema_init (&child->load_sema, 0);
+  sema_init (&child->exit_sema, 0);
+
+  list_push_back (&thread_current ()->process_info->child_list, &child->elem);
+
+  return child;
+}
+
+/* Searches for and returns the child process with the id of the integer passed
+   in making use of list functions from list.c which return the head, tail and
+   next element. */
+struct child_process *
+process_get_child (int pid)
+{
+  struct process_info *info = thread_current ()->process_info;
+  struct list_elem *e;
+
+  for (e = list_begin (&info->child_list);
+       e != list_end (&info->child_list);
+       e = list_next (e))
+    {
+      struct child_process *process = list_entry (e, struct child_process, elem);
+      if (pid == process->id)
+	      return process;
+    }
+
+return NULL;
+}
+
+/* Removes the child process and clears the associated memory allocation. */
+void
+process_remove_child (struct child_process *cp)
+{
+  list_remove(&cp->elem);
+  free(cp);
+}
+
+/* Iterates through child_list calling process_remove_child on each element. */
+void
+process_clear_children (void)
+{
+  struct thread *t = thread_current();
+  struct list_elem *next, *element = list_begin(&t->process_info->child_list);
+
+  while (element != list_end (&t->process_info->child_list))
+    {
+      next = list_next(element);
+      process_remove_child (list_entry(element, struct child_process, elem));
+      element = next;
+    }
+}
+
+/* Searches for and returns the file with the id of the integer passed
+   in making use of list functions from list.c which return the head, tail and
+   next element. */
+struct file *
+process_get_file (int fd)
+{
+  struct process_info *info = thread_current ()->process_info;
+  struct list_elem *e;
+
+  for (e = list_begin (&info->file_list);
+       e != list_end (&info->file_list);
+       e = list_next (e))
+    {
+      struct process_file *file = list_entry (e, struct process_file, elem);
+
+      if (fd == file->fd)
+        return file->file;
+    }
+
+  return NULL;
 }
 
 /* Free the current process's resources. */
@@ -109,6 +210,16 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  /* Clear child process list. */
+  process_clear_children();
+
+  /* Set exit value to true in case killed by the kernel. */
+  if (cur->process_info->parent_alive && cur->child != NULL)
+    {
+      cur->child->exit = true;
+      sema_up(&cur->child->exit_sema);
+    }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

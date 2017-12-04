@@ -14,6 +14,7 @@
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "userprog/syscall.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -133,23 +134,30 @@ thread_start (void)
 void
 thread_init_info (struct thread *t, tid_t tid)
 {
+#ifdef USERPROG
   struct process_info *info = malloc (sizeof (struct process_info));
   if (info == NULL)
     thread_exit();
 
-  /* TODO: Add parent process info. */
   info->id = tid;
   info->is_alive = true;
+  info->parent_alive = true;
   info->exit_status = 0;
   info->last_fd = 2; /* Set to 2, to prevent overwriting stdin and stdout. */
+
   list_init (&info->file_list);
   list_init (&info->child_list);
 
   t->process_info = info;
+
+  /* Add child process to child list. */
+  struct child_process *cp = process_add_child(t->tid);
+  t->child = cp;
   if (t == initial_thread) return;
 
   // we need to push this into the child list of the parent
   // need to update the info structure for this to work
+#endif
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -533,7 +541,6 @@ init_thread (struct thread *t, const char *name, int priority, bool is_kernel)
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
 }
-
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
    returns a pointer to the frame's base. */

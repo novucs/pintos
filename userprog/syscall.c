@@ -17,18 +17,9 @@
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
 
-/* Process identifier. */
-typedef int pid_t;
-#define PID_ERROR ((pid_t) -1)
-
 /* Typical return values from main() and arguments to exit(). */
 #define EXIT_SUCCESS 0           /* Successful execution. */
 #define EXIT_FAILURE -1          /* Unsuccessful execution. */
-
-/* Control values for exec() */
-#define NOT_LOADED 0 //
-#define LOAD_SUCCESS 1
-#define LOAD_FAIL 2
 
 #define ARG_CODE 0
 #define ARG_1 4
@@ -42,17 +33,15 @@ static void validate_buffer (const void* buffer, unsigned size);
 
 /* Utility functions. */
 static uint32_t load_stack(struct intr_frame *f, int offset);
-static struct file * process_get_file (int fd);
 static void exit (int status);
 static int retrieve_virtual_address(const void *phys_addr);
-static struct child_process * retrieve_child_process (int pid);
 
 /* System call functions. */
 static void syscall_handler (struct intr_frame *f);
 static void handle_halt (struct intr_frame *f UNUSED);
 static void handle_exit (struct intr_frame *f);
 static void handle_exec (struct intr_frame *f);
-static void handle_wait (struct intr_frame *f UNUSED);
+static void handle_wait (struct intr_frame *f);
 static void handle_create (struct intr_frame *f);
 static void handle_remove (struct intr_frame *f);
 static void handle_open (struct intr_frame *f);
@@ -139,54 +128,9 @@ retrieve_virtual_address(const void *phys_addr)
 {
   validate_ptr (phys_addr);
   void *ptr = pagedir_get_page (thread_current ()->pagedir, phys_addr);
-
   if (!ptr)
     exit (PID_ERROR);
-
   return (int) ptr;
-}
-
-/* Searches for and returns the child process with the id of the integer passed
-  in making use of list functions from list.c which return the head, tail and
-  next element. */
-struct child_process *
-retrieve_child_process (int pid)
-{
-  struct process_info *info = thread_current ()->process_info;
-  struct list_elem *e;
-
-  for (e = list_begin (&info->child_list);
-       e != list_end (&info->child_list);
-       e = list_next (e))
-    {
-      struct child_process *process = list_entry (e, struct child_process, elem);
-      if (pid == process->id)
-	      return process;
-    }
-
-  return NULL;
-}
-
-/* Searches for and returns the file with the id of the integer passed
-   in making use of list functions from list.c which return the head, tail and
-   next element. */
-struct file *
-process_get_file (int fd)
-{
-  struct process_info *info = thread_current ()->process_info;
-  struct list_elem *e;
-
-  for (e = list_begin (&info->file_list);
-       e != list_end (&info->file_list);
-       e = list_next (e))
-    {
-      struct process_file *file = list_entry (e, struct process_file, elem);
-
-      if (fd == file->fd)
-        return file->file;
-    }
-
-  return NULL;
 }
 
 static void
@@ -237,23 +181,23 @@ handle_exec (struct intr_frame *f)
   char *buffer = (char *) load_stack (f, ARG_1);
 
   pid_t pid = process_execute (buffer);
-  struct child_process* process = retrieve_child_process (pid);
-  ASSERT (process != NULL);
+  struct child_process *process = process_get_child (pid);
 
-  while (process->load == NOT_LOADED)
-    barrier ();
+  if (process == NULL)
+    {
+      f->eax = PID_ERROR;
+      return;
+    }
 
-  if (process->load == LOAD_FAIL) {
-    f->eax = PID_ERROR;
-  } else
-    f->eax = pid;
+  f->eax = pid;
 }
 
 /* Waits for a child process pid and retrieves the child's exit status. */
 static void
-handle_wait (struct intr_frame *f UNUSED)
+handle_wait (struct intr_frame *f)
 {
-  printf ("handle_wait\n");
+  pid_t pid = (pid_t) load_stack(f, ARG_1);
+  f->eax = process_wait(pid);
 }
 
 /* Creates a new file called file initially initial_size bytes in size.
