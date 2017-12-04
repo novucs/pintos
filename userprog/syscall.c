@@ -325,7 +325,8 @@ handle_read (struct intr_frame *f UNUSED)
   int fd = (int) load_stack (f, ARG_1);
   char *buffer = (char *) load_stack (f, ARG_2);
   size_t size = (int) load_stack (f, ARG_3);
-  /* TODO: Validate buffer. */
+
+  validate_buffer (buffer, size);
 
   if (fd == STDIN_FILENO)
     {
@@ -356,7 +357,8 @@ handle_write (struct intr_frame *f)
   int fd = (int) load_stack (f, ARG_1);
   const void *buffer = (void *) load_stack (f, ARG_2);
   size_t size = (size_t) load_stack (f, ARG_3);
-  /* TODO: Validate buffer. */
+
+  validate_buffer (buffer, size);
 
   if (fd == STDOUT_FILENO)
     {
@@ -374,7 +376,6 @@ handle_write (struct intr_frame *f)
     }
 
   int bytes = file_write (file, buffer, size);
-  printf("BYTES WRITTEN: %d\n", bytes);
   f->eax = bytes;
 }
 
