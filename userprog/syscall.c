@@ -119,16 +119,8 @@ load_stack(struct intr_frame *f, int offset)
 void
 validate_ptr (const void *vaddr)
 {
-  #ifdef DEBUG_MODE
-  printf ("(validate_ptr)\n");
-  #endif
-
   if (!is_user_vaddr(vaddr))
     {
-      #ifdef DEBUG_MODE
-      printf ("(validate_ptr): NOT VALID ADDRESS\n");
-      #endif
-
       exit (PID_ERROR);
     }
 }
@@ -137,10 +129,6 @@ validate_ptr (const void *vaddr)
 void
 validate_buffer (void* buffer, unsigned size)
 {
-  #ifdef DEBUG_MODE
-  printf ("(validate_buffer)\n");
-  #endif
-
   unsigned i;
   char* local_buffer = (char *) buffer;
 
@@ -156,10 +144,6 @@ validate_buffer (void* buffer, unsigned size)
 void
 retrieve_args (struct intr_frame *f, int *arg, int n)
 {
-  #ifdef DEBUG_MODE
-  printf ("(retrieve_args)\n");
-  #endif
-
   int i;
   int *ptr;
 
@@ -176,10 +160,6 @@ retrieve_args (struct intr_frame *f, int *arg, int n)
 int
 retrieve_virtual_address(const void *phys_addr)
 {
-  #ifdef DEBUG_MODE
-  printf ("(retrieve_virtual_address)\n");
-  #endif
-
   validate_ptr (phys_addr);
   void *ptr = pagedir_get_page (thread_current ()->pagedir, phys_addr);
 
@@ -195,10 +175,6 @@ retrieve_virtual_address(const void *phys_addr)
 struct child_process *
 retrieve_child_process (int pid)
 {
-  #ifdef DEBUG_MODE
-  printf ("(retrieve_child_process)\n");
-  #endif
-
   struct thread *cur = thread_current ();
   struct list_elem *e;
 
@@ -248,10 +224,6 @@ syscall_handler (struct intr_frame *f)
 static void
 handle_halt (struct intr_frame *f UNUSED)
 {
-  #ifdef DEBUG_MODE
-  printf ("(halt)\n");
-  #endif
-
   shutdown_power_off ();
 }
 
@@ -283,10 +255,6 @@ exit (int status)
 static void
 handle_exec (struct intr_frame *f)
 {
-  #ifdef DEBUG_MODE
-  printf ("(exec)\n");
-  #endif
-
   char *buffer = (char *) load_stack (f, ARG_1);
 
   pid_t pid = process_execute (buffer);
@@ -366,10 +334,6 @@ handle_write (struct intr_frame *f)
   int fd = (int) load_stack (f, ARG_1);
   const void *buffer = (void *) load_stack (f, ARG_2);
   unsigned int length = (unsigned int) load_stack (f, ARG_3);
-
-  #ifdef DEBUG_MODE
-  printf ("(write)\n");
-  #endif
 
   if (fd == STDOUT_FILENO)
     {
