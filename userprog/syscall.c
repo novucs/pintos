@@ -350,7 +350,7 @@ handle_read (struct intr_frame *f UNUSED)
 
   struct file *file = process_get_file (fd);
 
-  if (fd == NULL)
+  if (file == NULL)
     {
       f->eax = EXIT_FAILURE;
       return;
