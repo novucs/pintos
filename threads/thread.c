@@ -12,10 +12,12 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
-#ifdef USERPROG
 #include "userprog/process.h"
+#include "userprog/syscall.h"
+#ifdef USERPROG
 #endif
 
+#define NONE -1
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -108,6 +110,7 @@ thread_init (void)
 
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -229,6 +232,11 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
+
+  // Add child process to child list
+  t->parent = thread_tid();
+  struct child_process *cp = add_child_process(t->tid);
+  t->child = cp;
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -528,8 +536,32 @@ init_thread (struct thread *t, const char *name, int priority, bool is_kernel)
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
+
+  list_init(&t->lock_list);
+  list_init(&t->child_list);
+  t->child = NULL;
+  t->parent = NONE;
 }
 
+/*
+  Searches thread list to see if thread ID is active and returns true if found
+  if ID doesn't exist, returns true.
+*/
+bool is_thread_alive (int pid)
+{
+  struct list_elem *e;
+
+  for (e = list_begin (&all_list); e != list_end (&all_list);
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, allelem);
+      if (t->tid == pid)
+	{
+	  return true;
+	}
+    }
+  return false;
+}
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
    returns a pointer to the frame's base. */

@@ -17,18 +17,10 @@
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
 
-/* Process identifier. */
-typedef int pid_t;
-#define PID_ERROR ((pid_t) -1)
 
 /* Typical return values from main() and arguments to exit(). */
 #define EXIT_SUCCESS 0           /* Successful execution. */
 #define EXIT_FAILURE -1          /* Unsuccessful execution. */
-
-/* Control values for exec() */
-#define NOT_LOADED 0 //
-#define LOAD_SUCCESS 1
-#define LOAD_FAIL 2
 
 #define ARG_CODE 0
 #define ARG_1 4
@@ -44,14 +36,16 @@ static uint32_t load_stack(struct intr_frame *f, int offset);
 static struct file * process_get_file (int fd);
 static void exit (int status);
 static int retrieve_virtual_address(const void *phys_addr);
-static struct child_process * retrieve_child_process (int pid);
+void unpin_buffer (void* buffer, unsigned size);
+void unpin_string (void* str);
+void unpin_ptr (void* vaddr);
 
 /* System call functions. */
 static void syscall_handler (struct intr_frame *f);
 static void handle_halt (struct intr_frame *f UNUSED);
 static void handle_exit (struct intr_frame *f);
 static void handle_exec (struct intr_frame *f);
-static void handle_wait (struct intr_frame *f UNUSED);
+static void handle_wait (struct intr_frame *f);
 static void handle_create (struct intr_frame *f UNUSED);
 static void handle_remove (struct intr_frame *f UNUSED);
 static void handle_open (struct intr_frame *f UNUSED);
@@ -138,11 +132,31 @@ retrieve_virtual_address(const void *phys_addr)
 {
   validate_ptr (phys_addr);
   void *ptr = pagedir_get_page (thread_current ()->pagedir, phys_addr);
-
   if (!ptr)
     exit (PID_ERROR);
-
   return (int) ptr;
+}
+
+/*
+  Creates a new child process. Used by thread.c create_thread() to
+  initialise the struct child element of the struct thread
+*/
+struct child_process*
+add_child_process (int pid)
+{
+  struct child_process* child = malloc(sizeof(struct child_process));
+  if (!child)
+    {
+      return NULL;
+    }
+  child->pid = pid;
+  child->load = NOT_LOADED;
+  child->wait = false;
+  child->exit = false;
+  sema_init(&child->load_sema, 0);
+  sema_init(&child->exit_sema, 0);
+  list_push_back(&thread_current()->child_list,&child->elem);
+  return child;
 }
 
 /* Searches for and returns the child process with the id of the integer passed
@@ -151,19 +165,44 @@ retrieve_virtual_address(const void *phys_addr)
 struct child_process *
 retrieve_child_process (int pid)
 {
-  struct thread *cur = thread_current ();
-  struct list_elem *e;
+  struct thread *cur = thread_current();
+  struct list_elem *next, *element = list_begin(&cur->child_list);
 
-  for (e = list_begin (&cur->child_list);
-       e != list_end (&cur->child_list);
-       e = list_next (e))
+  while (element != list_end (&cur->child_list))
     {
-      struct child_process *process = list_entry (e, struct child_process, elem);
-      if (pid == process->pid)
-	      return process;
+      next = list_next(element);
+      if (pid == list_entry(element, struct child_process, elem)->pid)
+        return list_entry(element, struct child_process, elem);
+      element = next;
     }
-
   return NULL;
+}
+
+/*
+  Removes the child process and clears the associated memory allocation.
+*/
+void
+remove_child_process (struct child_process *cp)
+{
+  list_remove(&cp->elem);
+  free(cp);
+}
+
+/*
+  Iterates through child_list calling remove_child_process on each element
+*/
+void
+clear_child_processes (void)
+{
+  struct thread *t = thread_current();
+  struct list_elem *next, *element = list_begin(&t->child_list);
+
+  while (element != list_end (&t->child_list))
+    {
+      next = list_next(element);
+      remove_child_process (list_entry(element, struct child_process, elem));
+      element = next;
+    }
 }
 
 /* Searches for and returns the file with the id of the integer passed
@@ -212,7 +251,6 @@ handle_exit (struct intr_frame *f)
   int status = (int) load_stack (f, ARG_1);
   exit (status);
 }
-
 static void
 exit (int status)
 {
@@ -231,7 +269,6 @@ static void
 handle_exec (struct intr_frame *f)
 {
   char *buffer = (char *) load_stack (f, ARG_1);
-
   pid_t pid = process_execute (buffer);
   struct child_process* process = retrieve_child_process (pid);
   ASSERT (process != NULL);
@@ -247,9 +284,11 @@ handle_exec (struct intr_frame *f)
 
 /* Waits for a child process pid and retrieves the child's exit status. */
 static void
-handle_wait (struct intr_frame *f UNUSED)
+handle_wait (struct intr_frame *f)
 {
-  printf ("handle_wait\n");
+  //printf("\nhandle_wait");
+  pid_t pid = (pid_t) load_stack(f, ARG_1);
+  f->eax = process_wait(pid);
 }
 
 /* Creates a new file called file initially initial_size bytes in size.
@@ -259,7 +298,7 @@ handle_wait (struct intr_frame *f UNUSED)
 static void
 handle_create (struct intr_frame *f UNUSED)
 {
-  printf ("handle_create\n");
+  printf("\nhandle_create");
 }
 
 /* Deletes the file called file. Returns true if successful, false otherwise.
@@ -268,7 +307,7 @@ handle_create (struct intr_frame *f UNUSED)
 static void
 handle_remove (struct intr_frame *f UNUSED)
 {
-  printf ("handle_remove\n");
+  printf("\nhandle_remove");
 }
 
 /* Opens the file called file. Returns a nonnegative integer handle called a
@@ -280,14 +319,14 @@ handle_remove (struct intr_frame *f UNUSED)
 static void
 handle_open (struct intr_frame *f UNUSED)
 {
-  printf ("handle_open\n");
+  printf("\nhandle_open");
 }
 
 /* Returns the size, in bytes, of the file open as fd. */
 static void
 handle_filesize (struct intr_frame *f UNUSED)
 {
-  printf ("handle_filesize\n");
+  printf("\nhandle_filesize");
 }
 
 /* Reads size bytes from the file open as fd into buffer.
@@ -297,7 +336,7 @@ handle_filesize (struct intr_frame *f UNUSED)
 static void
 handle_read (struct intr_frame *f UNUSED)
 {
-  printf ("handle_read\n");
+  printf("\nhandle_read");
 }
 
 /* Writes size bytes from buffer to the open file fd. Returns the
@@ -306,6 +345,7 @@ handle_read (struct intr_frame *f UNUSED)
 static void
 handle_write (struct intr_frame *f)
 {
+  //FIXME: GARETH
   int fd = (int) load_stack (f, ARG_1);
   const void *buffer = (void *) load_stack (f, ARG_2);
   size_t size = (size_t) load_stack (f, ARG_3);
@@ -338,7 +378,7 @@ handle_write (struct intr_frame *f)
 static void
 handle_seek (struct intr_frame *f UNUSED)
 {
-  printf ("handle_seek\n");
+  printf("\nhandle_seek");
 }
 
 /* Returns the position of the next byte to be read or written in open file fd,
@@ -346,7 +386,7 @@ handle_seek (struct intr_frame *f UNUSED)
 static void
 handle_tell (struct intr_frame *f UNUSED)
 {
-  printf ("handle_tell\n");
+  printf("\nhandle_tell");
 }
 
 /* Closes file descriptor fd. Exiting or terminating a process implicitly
@@ -355,7 +395,7 @@ handle_tell (struct intr_frame *f UNUSED)
 static void
 handle_close (struct intr_frame *f UNUSED)
 {
-  printf ("handle_close\n");
+  printf("\nhandle_close");
 }
 
 /* ---------------------------------------------------------
@@ -367,41 +407,41 @@ handle_close (struct intr_frame *f UNUSED)
 static void
 handle_mmap (struct intr_frame *f UNUSED)
 {
-  printf ("handle_mmap\n");
+  printf("\nhandle_mmap");
 }
 
 static void
 handle_munmap (struct intr_frame *f UNUSED)
 {
-  printf ("handle_munmap\n");
+  printf("\nhandle_munmap");
 }
 
 static void
 handle_chdir (struct intr_frame *f UNUSED)
 {
-  printf ("handle_chdir\n");
+  printf("\nhandle_chdir");
 }
 
 static void
 handle_mkdir (struct intr_frame *f UNUSED)
 {
-  printf ("handle_mkdir\n");
+  printf("\nhandle_mkdir");
 }
 
 static void
 handle_readdir (struct intr_frame *f UNUSED)
 {
-  printf ("handle_readdir\n");
+  printf("\nhandle_readdir");
 }
 
 static void
 handle_isdir (struct intr_frame *f UNUSED)
 {
-  printf ("handle_isdir\n");
+  printf("\nhandle_isdir");
 }
 
 static void
 handle_inumber (struct intr_frame *f UNUSED)
 {
-  printf ("handle_inumber\n");
+  printf("\nhandle_inumber");
 }

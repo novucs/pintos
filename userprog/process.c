@@ -18,7 +18,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-
+#include "userprog/syscall.h"
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 static void free_process_info (struct thread *t);
@@ -30,6 +30,7 @@ static void free_process_info (struct thread *t);
 tid_t
 process_execute (const char *file_name)
 {
+  ////printf("\n(process_execute)");
   char *fn_copy;
   tid_t tid;
 
@@ -70,11 +71,22 @@ start_process (void *file_name_)
 
   success = load (file_name, &if_.eip, &if_.esp);
 
-  /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success)
-    thread_exit ();
+  //GP
+  if (success){
+      struct thread *cur = thread_current();
+      cur->child->load = LOAD_SUCCESS;
+    }
+  sema_up(&thread_current()->child->load_sema);
 
+
+  /* If load failed, set child load status and quit. */
+  palloc_free_page (file_name);
+  if (!success){
+    struct thread *cur = thread_current();
+    cur->child->load = LOAD_FAIL;
+
+    thread_exit ();
+  }
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -95,12 +107,26 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED)
+process_wait (tid_t child_tid)
 {
-    // FIXME: @bgaster --- quick hack to make sure processes execute!
-  for(;;) ;
-
-  return -1;
+  //GP
+ struct child_process* child = retrieve_child_process(child_tid);
+ if (!child)
+   {
+     return PID_ERROR;
+   }
+ if (child->wait)
+   {
+     return PID_ERROR;
+   }
+ child->wait = true;
+ if (!child->exit)
+   {
+     sema_down(&child->exit_sema);
+   }
+ int status = child->status;
+ remove_child_process(child);
+ return status;
 }
 
 /* Free the current process's resources. */
@@ -109,6 +135,16 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  // Clear child process list
+  clear_child_processes();
+
+  // Set exit value to true in case killed by the kernel
+  if (is_thread_alive(cur->parent) && cur->child)
+  {
+    cur->child->exit = true;
+    sema_up(&cur->child->exit_sema);
+  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -359,6 +395,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* We arrive here whether the load is successful or not. */
   free (file_name_copy);
   file_close (file);
+  //printf("\n(load) return: %d", success);
   return success;
 }
 
