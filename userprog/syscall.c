@@ -22,7 +22,7 @@ typedef int pid_t;
 #define PID_ERROR ((pid_t) -1)
 
 /* Typical return values from main() and arguments to exit(). */
-#define EXIT_SUCCESS 0          /* Successful execution. */
+#define EXIT_SUCCESS 0           /* Successful execution. */
 #define EXIT_FAILURE -1          /* Unsuccessful execution. */
 
 /* Control values for exec() */
@@ -191,7 +191,6 @@ process_get_file (int fd)
 static void
 syscall_handler (struct intr_frame *f)
 {
-  /* TODO: @will - Validate the provided syscall code. */
   int code = (int) load_stack (f, ARG_CODE);
   syscall_handlers[code] (f);
 }
