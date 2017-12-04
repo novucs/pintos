@@ -271,7 +271,9 @@ handle_create (struct intr_frame *f UNUSED)
 static void
 handle_remove (struct intr_frame *f UNUSED)
 {
-  printf ("handle_remove\n");
+  const char *file_name = (const char *) load_stack (f, ARG_1);
+  bool success = filesys_remove (file_name);
+  f->eax = success;
 }
 
 /* Opens the file called file. Returns a nonnegative integer handle called a
