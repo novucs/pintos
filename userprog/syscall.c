@@ -397,7 +397,16 @@ handle_write (struct intr_frame *f)
 static void
 handle_seek (struct intr_frame *f UNUSED)
 {
-  printf ("handle_seek\n");
+  int fd = (int) load_stack(f, ARG_1);
+  int position = (int) load_stack(f, ARG_2);
+  struct file *file = process_get_file (fd);
+
+  /* Do nothing if given invalid file descriptor. */
+  if (file == NULL)
+    return;
+
+  /* Seek position in file. */
+  file_seek (file, position);
 }
 
 /* Returns the position of the next byte to be read or written in open file fd,
