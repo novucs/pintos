@@ -414,7 +414,15 @@ handle_seek (struct intr_frame *f UNUSED)
 static void
 handle_tell (struct intr_frame *f UNUSED)
 {
-  printf ("handle_tell\n");
+  int fd = (int) load_stack(f, ARG_1);
+  struct file *file = process_get_file (fd);
+
+  /* Do nothing if given invalid file descriptor. */
+  if (file == NULL)
+    return;
+
+  /* Tell position of file. */
+  f->eax = file_tell (file);
 }
 
 /* Closes file descriptor fd. Exiting or terminating a process implicitly
