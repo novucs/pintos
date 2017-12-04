@@ -314,7 +314,8 @@ main (int argc, char *argv[])
              file system, the 0 argument means that this option
              will not be useful until project 4 is
              implemented. */
-	  create (argv[i], 0);
+	  // create (argv[i], 0);
+	  create (argv[i], 512);
 	  handle = open (argv[i]);
           if (handle < 0)
             {
