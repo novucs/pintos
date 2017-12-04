@@ -137,9 +137,13 @@ thread_init_info (struct thread *t, tid_t tid)
   if (info == NULL)
     thread_exit();
 
-  info->pid = tid;
+  /* TODO: Add parent process info. */
+  info->id = tid;
   info->is_alive = true;
   info->exit_status = 0;
+  info->last_fd = 2; /* Set to 2, to prevent overwriting stdin and stdout. */
+  list_init (&info->file_list);
+  list_init (&info->child_list);
 
   t->process_info = info;
   if (t == initial_thread) return;

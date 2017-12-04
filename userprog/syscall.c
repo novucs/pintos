@@ -52,9 +52,9 @@ static void handle_halt (struct intr_frame *f UNUSED);
 static void handle_exit (struct intr_frame *f);
 static void handle_exec (struct intr_frame *f);
 static void handle_wait (struct intr_frame *f UNUSED);
-static void handle_create (struct intr_frame *f UNUSED);
-static void handle_remove (struct intr_frame *f UNUSED);
-static void handle_open (struct intr_frame *f UNUSED);
+static void handle_create (struct intr_frame *f);
+static void handle_remove (struct intr_frame *f);
+static void handle_open (struct intr_frame *f);
 static void handle_filesize (struct intr_frame *f UNUSED);
 static void handle_read (struct intr_frame *f UNUSED);
 static void handle_write (struct intr_frame *f);
@@ -151,15 +151,15 @@ retrieve_virtual_address(const void *phys_addr)
 struct child_process *
 retrieve_child_process (int pid)
 {
-  struct thread *cur = thread_current ();
+  struct process_info *info = thread_current ()->process_info;
   struct list_elem *e;
 
-  for (e = list_begin (&cur->child_list);
-       e != list_end (&cur->child_list);
+  for (e = list_begin (&info->child_list);
+       e != list_end (&info->child_list);
        e = list_next (e))
     {
       struct child_process *process = list_entry (e, struct child_process, elem);
-      if (pid == process->pid)
+      if (pid == process->id)
 	      return process;
     }
 
@@ -172,11 +172,11 @@ retrieve_child_process (int pid)
 struct file*
 process_get_file (int fd)
 {
-  struct thread *t = thread_current ();
+  struct process_info *info = thread_current ()->process_info;
   struct list_elem *e;
 
-  for (e = list_begin (&t->file_list);
-       e != list_end (&t->file_list);
+  for (e = list_begin (&info->file_list);
+       e != list_end (&info->file_list);
        e = list_next (e))
     {
       struct process_file *file = list_entry (e, struct process_file, elem);
@@ -283,9 +283,29 @@ handle_remove (struct intr_frame *f UNUSED)
     fd 1 (STDOUT_FILENO) is standard output.
   The open system call will never return either of these file descriptors. */
 static void
-handle_open (struct intr_frame *f UNUSED)
+handle_open (struct intr_frame *f)
 {
-  printf ("handle_open\n");
+  const char *file_name = (const char *) load_stack (f, ARG_1);
+  struct file *file = filesys_open (file_name);
+
+  /* File open was denied, return failure. */
+  if (file == NULL)
+    {
+      f->eax = EXIT_FAILURE;
+      return;
+    }
+
+  /* Create a new file descriptor. */
+  struct process_info *info = thread_current ()->process_info;
+  struct process_file *pf = malloc (sizeof (struct process_file));
+
+  pf->fd = ++(info->last_fd);
+  pf->file = file;
+
+  list_push_back (&info->file_list, &pf->elem);
+
+  /* Return file descriptor ID. */
+  f->eax = pf->fd;
 }
 
 /* Returns the size, in bytes, of the file open as fd. */

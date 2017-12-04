@@ -25,30 +25,19 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
-/* Metadata for process, which could be retrieved by parent process even
-   after the process exits.
-   Note, this is the very basics as no info on parent and semephores.
-*/
-struct process_info
-  {
-    bool is_alive;			  /* Whether process is alive */
-    int exit_status;			/* Record exit status */
-    int pid;				      /* Record the pid */
-  };
-
 /* Used by syscall.c. */
 struct lock filesys_lock;
 
 struct process_file
   {
-    struct file *file;
-    int fd;
-    struct list_elem elem;
+    int fd;                             /* File descriptor. */
+    struct file *file;                  /* The relevent file. */
+    struct list_elem elem;              /* Used for storing in process info. */
   };
 
 struct child_process
   {
-    int pid;
+    int id;                             /* The child process ID. */
     int load;
     bool wait;
     bool exit;
@@ -56,6 +45,21 @@ struct child_process
     struct semaphore load_sema;
     struct semaphore exit_sema;
     struct list_elem elem;
+  };
+
+/* Metadata for process, which could be retrieved by parent
+   process even after the process exits. Note, this is the very
+   basics as no info on parent and semephores. */
+struct process_info
+  {
+    int id;                             /* This process ID. */
+    bool is_alive;                      /* Whether process is alive. */
+    int parent_id;                      /* Parent process ID. */
+    bool parent_alive;                  /* Whether the parent is alive. */
+    int exit_status;                    /* Exit status code. */
+    struct list file_list;              /* Files open in this process. */
+    struct list child_list;             /* Child processes. */
+    int last_fd;                        /* Last file descriptor opened. */
   };
 
 /* A kernel thread or user process.
@@ -138,17 +142,6 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-
-    /* Needed for file system sys calls. */
-    struct list file_list;
-    int fd;
-
-    /* Needed for wait / exec sys calls. */
-    struct list child_list;
-    tid_t parent;
-
-    /* Points to child_process struct in parent's child list. */
-    struct child_process* child;
   };
 
 /* If false (default), use round-robin scheduler.
