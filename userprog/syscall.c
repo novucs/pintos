@@ -169,7 +169,7 @@ retrieve_child_process (int pid)
 /* Searches for and returns the file with the id of the integer passed
    in making use of list functions from list.c which return the head, tail and
    next element. */
-struct file*
+struct file *
 process_get_file (int fd)
 {
   struct process_info *info = thread_current ()->process_info;
@@ -431,7 +431,23 @@ handle_tell (struct intr_frame *f UNUSED)
 static void
 handle_close (struct intr_frame *f UNUSED)
 {
-  printf ("handle_close\n");
+  int fd = (int) load_stack(f, ARG_1);
+  struct process_info *info = thread_current ()->process_info;
+  struct list_elem *e;
+
+  for (e = list_begin (&info->file_list);
+       e != list_end (&info->file_list);
+       e = list_next (e))
+    {
+      struct process_file *file = list_entry (e, struct process_file, elem);
+
+      if (fd != file->fd)
+        continue;
+
+      file_close (file->file);
+      list_remove (e);
+      break;
+    }
 }
 
 /* ---------------------------------------------------------
