@@ -322,7 +322,29 @@ handle_filesize (struct intr_frame *f UNUSED)
 static void
 handle_read (struct intr_frame *f UNUSED)
 {
-  printf ("handle_read\n");
+  int fd = (int) load_stack (f, ARG_1);
+  char *buffer = (char *) load_stack (f, ARG_2);
+  size_t size = (int) load_stack (f, ARG_3);
+  /* TODO: Validate buffer. */
+
+  if (fd == STDIN_FILENO)
+    {
+      for (size_t i = 0; i < size; i++)
+        *(buffer + i) = input_getc();
+      f->eax = size;
+      return;
+    }
+
+  struct file *file = process_get_file (fd);
+
+  if (fd == NULL)
+    {
+      f->eax = EXIT_FAILURE;
+      return;
+    }
+
+  int bytes = file_read (file, buffer, size);
+  f->eax = bytes;
 }
 
 /* Writes size bytes from buffer to the open file fd. Returns the
@@ -334,6 +356,7 @@ handle_write (struct intr_frame *f)
   int fd = (int) load_stack (f, ARG_1);
   const void *buffer = (void *) load_stack (f, ARG_2);
   size_t size = (size_t) load_stack (f, ARG_3);
+  /* TODO: Validate buffer. */
 
   if (fd == STDOUT_FILENO)
     {
@@ -342,18 +365,16 @@ handle_write (struct intr_frame *f)
       return;
     }
 
-  lock_acquire (&filesys_lock);
   struct file *file = process_get_file (fd);
 
-  if (!file)
+  if (file == NULL)
     {
-      lock_release (&filesys_lock);
-      f->eax = PID_ERROR;
+      f->eax = EXIT_FAILURE;
       return;
     }
 
   int bytes = file_write (file, buffer, size);
-  lock_release (&filesys_lock);
+  printf("BYTES WRITTEN: %d\n", bytes);
   f->eax = bytes;
 }
 
