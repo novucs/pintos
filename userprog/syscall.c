@@ -312,7 +312,19 @@ handle_open (struct intr_frame *f)
 static void
 handle_filesize (struct intr_frame *f UNUSED)
 {
-  printf ("handle_filesize\n");
+  int fd = (int) load_stack (f, ARG_1);
+  struct file *file = process_get_file (fd);
+
+  /* Return -1 if file descriptor invalid. */
+  if (file == NULL)
+    {
+      f->eax = EXIT_FAILURE;
+      return;
+    }
+
+  /* Return size of open file, in bytes. */
+  int bytes = file_length (file);
+  f->eax = bytes;
 }
 
 /* Reads size bytes from the file open as fd into buffer.
