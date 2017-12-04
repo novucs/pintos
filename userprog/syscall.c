@@ -110,7 +110,7 @@ syscall_init (void)
 static uint32_t
 load_stack(struct intr_frame *f, int offset)
 {
-  /* TODO: Add check for valid address. */
+  validate_ptr (f->esp + offset);
   return *((uint32_t*)(f->esp + offset));
 }
 
