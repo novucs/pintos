@@ -419,7 +419,10 @@ handle_tell (struct intr_frame *f UNUSED)
 
   /* Do nothing if given invalid file descriptor. */
   if (file == NULL)
-    return;
+    {
+      f->eax = EXIT_FAILURE;
+      return;
+    }
 
   /* Tell position of file. */
   f->eax = file_tell (file);
