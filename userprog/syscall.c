@@ -37,16 +37,13 @@ typedef int pid_t;
 
 /* Validation functions. */
 static void validate_ptr (const void *vaddr);
-static void validate_buffer (void* buffer, unsigned size);
+static void validate_buffer (const void* buffer, unsigned size);
 
 /* Utility functions. */
 static uint32_t load_stack(struct intr_frame *f, int offset);
-static int retrieve_virtual_address(const void *phys_addr);
 static struct file * process_get_file (int fd);
 static void exit (int status);
-
-/* Retrieval functions. */
-static void retrieve_args (struct intr_frame *f, int *arg, int n);
+static int retrieve_virtual_address(const void *phys_addr);
 static struct child_process * retrieve_child_process (int pid);
 
 /* System call functions. */
@@ -120,38 +117,17 @@ void
 validate_ptr (const void *vaddr)
 {
   if (!is_user_vaddr(vaddr))
-    {
-      exit (PID_ERROR);
-    }
+    exit (PID_ERROR);
 }
 
 /* Checks the pointer addresses to args on stack are valid. */
 void
-validate_buffer (void* buffer, unsigned size)
+validate_buffer (const void* buffer, size_t size)
 {
-  unsigned i;
-  char* local_buffer = (char *) buffer;
-
-  for (i = 0; i < size; i++)
+  for (size_t i = 0; i < size; i++)
     {
-      validate_ptr ((const void*) local_buffer);
-      local_buffer++;
-    }
-}
-
-/* Collects the args stored in the stack by using the addresses stored
-   in the stack as the pointer. */
-void
-retrieve_args (struct intr_frame *f, int *arg, int n)
-{
-  int i;
-  int *ptr;
-
-  for (i = 0; i < n; i++)
-    {
-      ptr = (int *) f->esp + i + 1;
-      validate_ptr ((const void *) ptr);
-      arg[i] = *ptr;
+      validate_ptr (buffer);
+      buffer++;
     }
 }
 
@@ -203,10 +179,10 @@ process_get_file (int fd)
        e != list_end (&t->file_list);
        e = list_next (e))
     {
-      struct process_file *pf = list_entry (e, struct process_file, elem);
+      struct process_file *file = list_entry (e, struct process_file, elem);
 
-      if (fd == pf->fd)
-        return pf->file;
+      if (fd == file->fd)
+        return file->file;
     }
 
   return NULL;
@@ -333,12 +309,12 @@ handle_write (struct intr_frame *f)
 {
   int fd = (int) load_stack (f, ARG_1);
   const void *buffer = (void *) load_stack (f, ARG_2);
-  unsigned int length = (unsigned int) load_stack (f, ARG_3);
+  size_t size = (size_t) load_stack (f, ARG_3);
 
   if (fd == STDOUT_FILENO)
     {
-      putbuf (buffer, length);
-      f->eax = length;
+      putbuf (buffer, size);
+      f->eax = size;
       return;
     }
 
@@ -352,7 +328,7 @@ handle_write (struct intr_frame *f)
       return;
     }
 
-  int bytes = file_write (file, buffer, length);
+  int bytes = file_write (file, buffer, size);
   lock_release (&filesys_lock);
   f->eax = bytes;
 }
