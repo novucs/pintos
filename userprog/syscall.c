@@ -259,7 +259,10 @@ handle_wait (struct intr_frame *f UNUSED)
 static void
 handle_create (struct intr_frame *f UNUSED)
 {
-  printf ("handle_create\n");
+  const char *file_name = (const char *) load_stack (f, ARG_1);
+  off_t initial_size = (off_t) load_stack (f, ARG_2);
+  bool success = filesys_create (file_name, initial_size);
+  f->eax = success;
 }
 
 /* Deletes the file called file. Returns true if successful, false otherwise.
