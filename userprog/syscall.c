@@ -55,12 +55,12 @@ static void handle_wait (struct intr_frame *f UNUSED);
 static void handle_create (struct intr_frame *f);
 static void handle_remove (struct intr_frame *f);
 static void handle_open (struct intr_frame *f);
-static void handle_filesize (struct intr_frame *f UNUSED);
-static void handle_read (struct intr_frame *f UNUSED);
+static void handle_filesize (struct intr_frame *f);
+static void handle_read (struct intr_frame *f);
 static void handle_write (struct intr_frame *f);
-static void handle_seek (struct intr_frame *f UNUSED);
-static void handle_tell (struct intr_frame *f UNUSED);
-static void handle_close (struct intr_frame *f UNUSED);
+static void handle_seek (struct intr_frame *f);
+static void handle_tell (struct intr_frame *f);
+static void handle_close (struct intr_frame *f);
 static void handle_mmap (struct intr_frame *f UNUSED);
 static void handle_munmap (struct intr_frame *f UNUSED);
 static void handle_chdir (struct intr_frame *f UNUSED);
@@ -257,7 +257,7 @@ handle_wait (struct intr_frame *f UNUSED)
    not open it: opening the new file is a separate operation which would
    require a open system call. */
 static void
-handle_create (struct intr_frame *f UNUSED)
+handle_create (struct intr_frame *f)
 {
   const char *file_name = (const char *) load_stack (f, ARG_1);
   off_t initial_size = (off_t) load_stack (f, ARG_2);
@@ -269,7 +269,7 @@ handle_create (struct intr_frame *f UNUSED)
    A file may be removed regardless of whether it is open or closed, and
    removing an open file does not close it. */
 static void
-handle_remove (struct intr_frame *f UNUSED)
+handle_remove (struct intr_frame *f)
 {
   const char *file_name = (const char *) load_stack (f, ARG_1);
   bool success = filesys_remove (file_name);
@@ -310,7 +310,7 @@ handle_open (struct intr_frame *f)
 
 /* Returns the size, in bytes, of the file open as fd. */
 static void
-handle_filesize (struct intr_frame *f UNUSED)
+handle_filesize (struct intr_frame *f)
 {
   int fd = (int) load_stack (f, ARG_1);
   struct file *file = process_get_file (fd);
@@ -332,7 +332,7 @@ handle_filesize (struct intr_frame *f UNUSED)
    or -1 if the file could not be read (due to a condition other
    than end of file). Fd 0 reads from the keyboard using input_getc(). */
 static void
-handle_read (struct intr_frame *f UNUSED)
+handle_read (struct intr_frame *f)
 {
   int fd = (int) load_stack (f, ARG_1);
   char *buffer = (char *) load_stack (f, ARG_2);
@@ -395,7 +395,7 @@ handle_write (struct intr_frame *f)
    expressed in bytes from the beginning of the file.
    (Thus, a position of 0 is the file's start.) */
 static void
-handle_seek (struct intr_frame *f UNUSED)
+handle_seek (struct intr_frame *f)
 {
   int fd = (int) load_stack(f, ARG_1);
   int position = (int) load_stack(f, ARG_2);
@@ -412,7 +412,7 @@ handle_seek (struct intr_frame *f UNUSED)
 /* Returns the position of the next byte to be read or written in open file fd,
    expressed in bytes from the beginning of the file. */
 static void
-handle_tell (struct intr_frame *f UNUSED)
+handle_tell (struct intr_frame *f)
 {
   int fd = (int) load_stack(f, ARG_1);
   struct file *file = process_get_file (fd);
@@ -432,7 +432,7 @@ handle_tell (struct intr_frame *f UNUSED)
    closes all its open file descriptors, as if by calling this function
    for each one. */
 static void
-handle_close (struct intr_frame *f UNUSED)
+handle_close (struct intr_frame *f)
 {
   int fd = (int) load_stack(f, ARG_1);
   struct process_info *info = thread_current ()->process_info;
