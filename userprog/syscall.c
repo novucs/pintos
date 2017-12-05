@@ -166,6 +166,10 @@ exit (int status)
 {
   struct thread * current = thread_current ();
   current->process_info->exit_status = status;
+  if (current->process_info->parent_alive && current->child != NULL)
+    {
+      current->child->status = status;
+    }
   thread_exit ();
 }
 
