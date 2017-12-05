@@ -52,7 +52,11 @@ process_execute (const char *file_name)
     palloc_free_page (fn_copy);
 
   struct child_process* child = process_get_child(tid);
-  sema_down(&child->exit_sema);
+  sema_down(&child->load_sema);
+
+  if (child->status == PID_ERROR)
+    return PID_ERROR;
+
   return tid;
 }
 
@@ -72,13 +76,20 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
 
   success = load (file_name, &if_.eip, &if_.esp);
-  sema_up (&thread_current ()->child->load_sema);
+  struct thread *current_thread = thread_current ();
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success)
-    thread_exit ();
+    {
+      current_thread->process_info->exit_status = PID_ERROR;
+      current_thread->child->status = PID_ERROR;
+      sema_up (&current_thread->child->load_sema);
+      thread_exit ();
+      NOT_REACHED ();
+    }
 
+  sema_up (&current_thread->child->load_sema);
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
