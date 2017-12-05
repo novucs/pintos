@@ -17,10 +17,6 @@
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
 
-/* Typical return values from main() and arguments to exit(). */
-#define EXIT_SUCCESS 0           /* Successful execution. */
-#define EXIT_FAILURE -1          /* Unsuccessful execution. */
-
 #define ARG_CODE 0
 #define ARG_1 4
 #define ARG_2 8
@@ -34,7 +30,6 @@ static void validate_buffer (const void* buffer, unsigned size);
 
 /* Utility functions. */
 static uint32_t load_stack(struct intr_frame *f, int offset);
-static void exit (int status);
 static int get_vaddr(const void *phys_addr);
 
 /* System call functions. */
@@ -159,18 +154,6 @@ handle_exit (struct intr_frame *f)
 {
   int status = (int) load_stack (f, ARG_1);
   exit (status);
-}
-
-static void
-exit (int status)
-{
-  struct thread * current = thread_current ();
-  current->process_info->exit_status = status;
-  if (current->process_info->parent_alive && current->child != NULL)
-    {
-      current->child->status = status;
-    }
-  thread_exit ();
 }
 
 /* Runs the executable whose name is given in cmd_line, passing any
