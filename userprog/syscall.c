@@ -26,6 +26,7 @@
 #define ARG_2 8
 #define ARG_3 12
 #define SYSTEM_CALL_COUNT 20
+#define USER_MEM_LIMIT ((void *) 0x08048000)
 
 /* Validation functions. */
 static void validate_ptr (const void *vaddr);
@@ -98,7 +99,12 @@ static uint32_t
 load_stack(struct intr_frame *f, int offset)
 {
   validate_ptr (f->esp + offset);
-  return *((uint32_t*)(f->esp + offset));
+  void *ptr = retrieve_virtual_address (f->esp+offset);
+
+  if (ptr < USER_MEM_LIMIT) {
+    exit (EXIT_FAILURE);
+  } else
+    return *((uint32_t*)(f->esp + offset));
 }
 
 /* Calls is_user_vaddr() from threads/vaddr.h to check address is valid
