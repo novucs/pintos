@@ -35,7 +35,7 @@ static void validate_buffer (const void* buffer, unsigned size);
 /* Utility functions. */
 static uint32_t load_stack(struct intr_frame *f, int offset);
 static void exit (int status);
-static int retrieve_virtual_address(const void *phys_addr);
+static int get_vaddr(const void *phys_addr);
 
 /* System call functions. */
 static void syscall_handler (struct intr_frame *f);
@@ -98,13 +98,7 @@ syscall_init (void)
 static uint32_t
 load_stack(struct intr_frame *f, int offset)
 {
-  validate_ptr (f->esp + offset);
-  void *ptr = retrieve_virtual_address (f->esp+offset);
-
-  if (ptr < USER_MEM_LIMIT) {
-    exit (EXIT_FAILURE);
-  } else
-    return *((uint32_t*)(f->esp + offset));
+  return *((uint32_t*)(get_vaddr (f->esp+offset)));
 }
 
 /* Calls is_user_vaddr() from threads/vaddr.h to check address is valid
@@ -113,7 +107,7 @@ void
 validate_ptr (const void *vaddr)
 {
   if (!is_user_vaddr(vaddr))
-    exit (PID_ERROR);
+    exit (EXIT_FAILURE);
 }
 
 /* Checks the pointer addresses to args on stack are valid. */
@@ -130,12 +124,12 @@ validate_buffer (const void* buffer, size_t size)
 /* Returns the kernel virtual address
    corresponding to the user process' physical address */
 int
-retrieve_virtual_address(const void *phys_addr)
+get_vaddr (const void *phys_addr)
 {
   validate_ptr (phys_addr);
   void *ptr = pagedir_get_page (thread_current ()->pagedir, phys_addr);
-  if (!ptr)
-    exit (PID_ERROR);
+  if (ptr == NULL || ptr < USER_MEM_LIMIT)
+    exit (EXIT_FAILURE);
   return (int) ptr;
 }
 
@@ -188,7 +182,7 @@ exit (int status)
 static void
 handle_exec (struct intr_frame *f)
 {
-  char *buffer = (char *) load_stack (f, ARG_1);
+  char *buffer = (char *) get_vaddr (load_stack (f, ARG_1));
 
   pid_t pid = process_execute (buffer);
   struct child_process *process = process_get_child (pid);
@@ -217,7 +211,7 @@ handle_wait (struct intr_frame *f)
 static void
 handle_create (struct intr_frame *f)
 {
-  const char *file_name = (const char *) load_stack (f, ARG_1);
+  const char *file_name = (const char *) get_vaddr (load_stack (f, ARG_1));
   off_t initial_size = (off_t) load_stack (f, ARG_2);
   bool success = filesys_create (file_name, initial_size);
   f->eax = success;
@@ -229,7 +223,7 @@ handle_create (struct intr_frame *f)
 static void
 handle_remove (struct intr_frame *f)
 {
-  const char *file_name = (const char *) load_stack (f, ARG_1);
+  const char *file_name = (const char *) get_vaddr (load_stack (f, ARG_1));
   bool success = filesys_remove (file_name);
   f->eax = success;
 }
@@ -243,7 +237,7 @@ handle_remove (struct intr_frame *f)
 static void
 handle_open (struct intr_frame *f)
 {
-  const char *file_name = (const char *) load_stack (f, ARG_1);
+  const char *file_name = (const char *) get_vaddr (load_stack (f, ARG_1));
   struct file *file = filesys_open (file_name);
 
   /* File open was denied, return failure. */
@@ -297,6 +291,7 @@ handle_read (struct intr_frame *f)
   size_t size = (int) load_stack (f, ARG_3);
 
   validate_buffer (buffer, size);
+  buffer = get_vaddr (buffer);
 
   if (fd == STDIN_FILENO)
     {
@@ -325,10 +320,11 @@ static void
 handle_write (struct intr_frame *f)
 {
   int fd = (int) load_stack (f, ARG_1);
-  const void *buffer = (void *) load_stack (f, ARG_2);
+  void *buffer = (void *) load_stack (f, ARG_2);
   size_t size = (size_t) load_stack (f, ARG_3);
 
   validate_buffer (buffer, size);
+  buffer = get_vaddr (buffer);
 
   if (fd == STDOUT_FILENO)
     {
