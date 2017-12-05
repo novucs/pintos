@@ -26,6 +26,7 @@
 #define ARG_2 8
 #define ARG_3 12
 #define SYSTEM_CALL_COUNT 20
+
 #define USER_MEM_LIMIT ((void *) 0x08048000)
 
 /* Validation functions. */
@@ -103,8 +104,7 @@ load_stack(struct intr_frame *f, int offset)
   if(ptr < USER_MEM_LIMIT){
     exit(PID_ERROR);
   }
-  else
-    return *((uint32_t*)(f->esp + offset));
+  return *((uint32_t*)(f->esp + offset));
 }
 
 /* Calls is_user_vaddr() from threads/vaddr.h to check address is valid
@@ -188,18 +188,30 @@ exit (int status)
 static void
 handle_exec (struct intr_frame *f)
 {
+  //printf("\nDEBUG(handle_exec)\n");
   char *buffer = (char *) load_stack (f, ARG_1);
 
   pid_t pid = process_execute (buffer);
-  struct child_process *process = process_get_child (pid);
+  struct child_process *child = process_get_child (pid);
 
-  if (process == NULL)
+  if (child == NULL)
     {
+      //printf("\nDEBUG(handle_exec)NULL\n");
       f->eax = PID_ERROR;
-      return;
     }
-
-  f->eax = pid;
+  if(child->load == NOT_LOADED){
+    //printf("\nDEBUG(handle_exec)NOT_LOADED\n");
+    sema_down(&child->load_sema);
+  }
+  if(child->load == LOAD_FAIL){
+    //printf("\nDEBUG(handle_exec)LOAD_FAIL\n");
+    process_remove_child(child);
+    f->eax = PID_ERROR;
+  }
+  else{
+    //printf("\nDEBUG(handle_exec)pid");
+    f->eax = pid;
+  }
 }
 
 /* Waits for a child process pid and retrieves the child's exit status. */

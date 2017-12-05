@@ -40,6 +40,7 @@ struct child_process
     int id;                             /* The child process ID. */
     bool wait;
     bool exit;
+    int load;
     int status;
     struct semaphore load_sema;
     struct semaphore exit_sema;
