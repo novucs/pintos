@@ -193,6 +193,25 @@ process_clear_children (void)
     }
 }
 
+struct process_file *
+process_get_file_meta (int fd)
+{
+  struct process_info *info = thread_current ()->process_info;
+  struct list_elem *e;
+
+  for (e = list_begin (&info->file_list);
+      e != list_end (&info->file_list);
+      e = list_next (e))
+   {
+     struct process_file *file = list_entry (e, struct process_file, elem);
+
+     if (fd == file->fd)
+       return file;
+   }
+
+  return NULL;
+}
+
 /* Searches for and returns the file with the id of the integer passed
    in making use of list functions from list.c which return the head, tail and
    next element. */

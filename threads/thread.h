@@ -31,6 +31,7 @@ struct lock filesys_lock;
 struct process_file
   {
     int fd;                             /* File descriptor. */
+    const char *file_name;              /* Name of file open. */
     struct file *file;                  /* The relevent file. */
     struct list_elem elem;              /* Used for storing in process info. */
   };
@@ -184,5 +185,6 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 bool is_thread_alive (int pid);
+bool is_process_active (const char *name);
 
 #endif /* threads/thread.h */

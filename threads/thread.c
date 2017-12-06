@@ -131,6 +131,26 @@ thread_start (void)
   sema_down (&idle_started);
 }
 
+bool
+is_process_active (const char *name)
+{
+  if (strcmp (thread_current ()->name, name) == 0)
+    return true;
+
+  struct list_elem *e;
+
+  for (e = list_begin (&all_list);
+       e != list_end (&all_list);
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, elem);
+      if (strcmp (name, t->name) == 0)
+        return true;
+    }
+
+  return false;
+}
+
 void
 thread_init_info (struct thread *t, tid_t tid)
 {
@@ -651,7 +671,7 @@ allocate_tid (void)
 
   return tid;
 }
-
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);

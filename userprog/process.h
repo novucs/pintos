@@ -15,6 +15,7 @@ struct child_process * process_add_child (int pid);
 struct child_process * process_get_child (int pid);
 void process_remove_child (struct child_process *cp);
 void process_clear_children (void);
+struct process_file * process_get_file_meta (int fd);
 struct file * process_get_file (int fd);
 void exit (int status);
 void process_exit (void);

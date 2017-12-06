@@ -233,8 +233,19 @@ handle_open (struct intr_frame *f)
   /* Create a new file descriptor. */
   struct process_info *info = thread_current ()->process_info;
   struct process_file *pf = malloc (sizeof (struct process_file));
+  int length = strlen (file_name) + 1;
+  char *file_name_copy = (char *) malloc (sizeof (char) * length);
+
+  if (file_name_copy == NULL)
+    {
+      f->eax = EXIT_FAILURE;
+      return;
+    }
+
+  strlcpy (file_name_copy, file_name, length);
 
   pf->fd = ++(info->last_fd);
+  pf->file_name = file_name_copy;
   pf->file = file;
 
   list_push_back (&info->file_list, &pf->elem);
@@ -316,13 +327,21 @@ handle_write (struct intr_frame *f)
       return;
     }
 
-  struct file *file = process_get_file (fd);
+  struct process_file *pf = process_get_file_meta (fd);
 
-  if (file == NULL)
+  if (pf == NULL)
     {
       f->eax = EXIT_FAILURE;
       return;
     }
+
+  if (is_process_active (pf->file_name))
+    {
+      f->eax = EXIT_SUCCESS;
+      return;
+    }
+
+  struct file *file = pf->file;
 
   int bytes = file_write (file, buffer, size);
   f->eax = bytes;
@@ -379,12 +398,13 @@ handle_close (struct intr_frame *f)
        e != list_end (&info->file_list);
        e = list_next (e))
     {
-      struct process_file *file = list_entry (e, struct process_file, elem);
+      struct process_file *pf = list_entry (e, struct process_file, elem);
 
-      if (fd != file->fd)
+      if (fd != pf->fd)
         continue;
 
-      file_close (file->file);
+      free (pf->file_name);
+      file_close (pf->file);
       list_remove (e);
       break;
     }
