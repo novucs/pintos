@@ -30,6 +30,7 @@ static void free_process_info (struct thread *t);
 tid_t
 process_execute (const char *file_name)
 {
+  lock_acquire (&filesys_lock);
   char *fn_copy;
   tid_t tid;
 
@@ -53,6 +54,7 @@ process_execute (const char *file_name)
 
   struct child_process* child = process_get_child(tid);
   sema_down(&child->load_sema);
+  lock_release (&filesys_lock);
 
   if (child->status == PID_ERROR)
     return PID_ERROR;
