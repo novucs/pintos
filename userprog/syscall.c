@@ -233,6 +233,13 @@ handle_open (struct intr_frame *f)
   /* Create a new file descriptor. */
   struct process_info *info = thread_current ()->process_info;
   struct process_file *pf = malloc (sizeof (struct process_file));
+
+  if (pf == NULL)
+    {
+      f->eax = EXIT_FAILURE;
+      return;
+    }
+
   int length = strlen (file_name) + 1;
   char *file_name_copy = (char *) malloc (sizeof (char) * length);
 
@@ -406,6 +413,7 @@ handle_close (struct intr_frame *f)
       free (pf->file_name);
       file_close (pf->file);
       list_remove (e);
+      free (pf);
       break;
     }
 }

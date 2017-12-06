@@ -235,14 +235,30 @@ process_get_file (int fd)
 }
 
 void
+process_close_files ()
+{
+  struct process_info *info = thread_current ()->process_info;
+
+  while (!list_empty (&info->file_list))
+    {
+      struct list_elem *e = list_pop_front (&info->file_list);
+      struct process_file *pf = list_entry (e, struct process_file, elem);
+      free (pf->file_name);
+      file_close (pf->file);
+      list_remove (e);
+      free (pf);
+    }
+}
+
+void
 exit (int status)
 {
   struct thread * current = thread_current ();
   current->process_info->exit_status = status;
+
   if (current->process_info->parent_alive && current->child != NULL)
-    {
-      current->child->status = status;
-    }
+    current->child->status = status;
+
   thread_exit ();
 }
 
@@ -255,6 +271,7 @@ process_exit (void)
 
   /* Clear child process list. */
   process_clear_children();
+  process_close_files ();
 
   /* Set exit value to true in case killed by the kernel. */
   if (cur->process_info->parent_alive && cur->child != NULL)
