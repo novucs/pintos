@@ -170,6 +170,7 @@ thread_init_info (struct thread *t, tid_t tid)
   list_init (&info->child_list);
 
   t->process_info = info;
+  t->holding_filesys_lock = false;
 
   /* Add child process to child list. */
   struct child_process *cp = process_add_child(t->tid);

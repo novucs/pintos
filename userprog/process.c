@@ -30,6 +30,7 @@ static void free_process_info (struct thread *t);
 tid_t
 process_execute (const char *file_name)
 {
+  thread_current ()->holding_filesys_lock = true;
   lock_acquire (&filesys_lock);
   char *fn_copy;
   tid_t tid;
@@ -55,6 +56,7 @@ process_execute (const char *file_name)
   struct child_process* child = process_get_child(tid);
   sema_down(&child->load_sema);
   lock_release (&filesys_lock);
+  thread_current ()->holding_filesys_lock = false;
 
   if (child->status == PID_ERROR)
     return PID_ERROR;
@@ -274,6 +276,12 @@ process_exit (void)
   /* Clear child process list. */
   process_clear_children();
   process_close_files ();
+
+  if (cur->holding_filesys_lock)
+    {
+      lock_release (&filesys_lock);
+      cur->holding_filesys_lock = false;
+    }
 
   /* Set exit value to true in case killed by the kernel. */
   if (cur->process_info->parent_alive && cur->child != NULL)

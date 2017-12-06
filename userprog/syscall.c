@@ -31,6 +31,8 @@ static void validate_buffer (const void* buffer, unsigned size);
 /* Utility functions. */
 static uint32_t load_stack(struct intr_frame *f, int offset);
 static int get_vaddr(const void *phys_addr);
+static void lock_filesys (void);
+static void unlock_filesys (void);
 
 /* System call functions. */
 static void syscall_handler (struct intr_frame *f);
@@ -194,12 +196,12 @@ handle_wait (struct intr_frame *f)
 static void
 handle_create (struct intr_frame *f)
 {
-  lock_acquire (&filesys_lock);
+  lock_filesys ();
   const char *file_name = (const char *) get_vaddr (load_stack (f, ARG_1));
   off_t initial_size = (off_t) load_stack (f, ARG_2);
   bool success = filesys_create (file_name, initial_size);
   f->eax = success;
-  lock_release (&filesys_lock);
+  unlock_filesys ();
 }
 
 /* Deletes the file called file. Returns true if successful, false otherwise.
@@ -208,11 +210,25 @@ handle_create (struct intr_frame *f)
 static void
 handle_remove (struct intr_frame *f)
 {
-  lock_acquire (&filesys_lock);
+  lock_filesys ();
   const char *file_name = (const char *) get_vaddr (load_stack (f, ARG_1));
   bool success = filesys_remove (file_name);
   f->eax = success;
+  unlock_filesys ();
+}
+
+static void
+lock_filesys (void)
+{
+  thread_current ()->holding_filesys_lock = true;
+  lock_acquire (&filesys_lock);
+}
+
+static void
+unlock_filesys (void)
+{
   lock_release (&filesys_lock);
+  thread_current ()->holding_filesys_lock = false;
 }
 
 /* Opens the file called file. Returns a nonnegative integer handle called a
@@ -224,7 +240,7 @@ handle_remove (struct intr_frame *f)
 static void
 handle_open (struct intr_frame *f)
 {
-  lock_acquire (&filesys_lock);
+  lock_filesys ();
   const char *file_name = (const char *) get_vaddr (load_stack (f, ARG_1));
   struct file *file = filesys_open (file_name);
 
@@ -232,7 +248,7 @@ handle_open (struct intr_frame *f)
   if (file == NULL)
     {
       f->eax = EXIT_FAILURE;
-      lock_release (&filesys_lock);
+      unlock_filesys ();
       return;
     }
 
@@ -243,6 +259,7 @@ handle_open (struct intr_frame *f)
   if (pf == NULL)
     {
       f->eax = EXIT_FAILURE;
+      unlock_filesys ();
       return;
     }
 
@@ -252,7 +269,7 @@ handle_open (struct intr_frame *f)
   if (file_name_copy == NULL)
     {
       f->eax = EXIT_FAILURE;
-      lock_release (&filesys_lock);
+      unlock_filesys ();
       return;
     }
 
@@ -266,14 +283,14 @@ handle_open (struct intr_frame *f)
 
   /* Return file descriptor ID. */
   f->eax = pf->fd;
-  lock_release (&filesys_lock);
+  unlock_filesys ();
 }
 
 /* Returns the size, in bytes, of the file open as fd. */
 static void
 handle_filesize (struct intr_frame *f)
 {
-  lock_acquire (&filesys_lock);
+  lock_filesys ();
   int fd = (int) load_stack (f, ARG_1);
   struct file *file = process_get_file (fd);
 
@@ -281,14 +298,14 @@ handle_filesize (struct intr_frame *f)
   if (file == NULL)
     {
       f->eax = EXIT_FAILURE;
-      lock_release (&filesys_lock);
+      unlock_filesys ();
       return;
     }
 
   /* Return size of open file, in bytes. */
   int bytes = file_length (file);
   f->eax = bytes;
-  lock_release (&filesys_lock);
+  unlock_filesys ();
 }
 
 /* Reads size bytes from the file open as fd into buffer.
@@ -313,19 +330,19 @@ handle_read (struct intr_frame *f)
       return;
     }
 
-  lock_acquire (&filesys_lock);
+  lock_filesys ();
   struct file *file = process_get_file (fd);
 
   if (file == NULL)
     {
       f->eax = EXIT_FAILURE;
-      lock_release (&filesys_lock);
+      unlock_filesys ();
       return;
     }
 
   int bytes = file_read (file, buffer, size);
   f->eax = bytes;
-  lock_release (&filesys_lock);
+  unlock_filesys ();
 }
 
 /* Writes size bytes from buffer to the open file fd. Returns the
@@ -348,20 +365,20 @@ handle_write (struct intr_frame *f)
       return;
     }
 
-  lock_acquire (&filesys_lock);
+  lock_filesys ();
   struct process_file *pf = process_get_file_meta (fd);
 
   if (pf == NULL)
     {
       f->eax = EXIT_FAILURE;
-      lock_release (&filesys_lock);
+      unlock_filesys ();
       return;
     }
 
   if (is_process_active (pf->file_name))
     {
       f->eax = EXIT_SUCCESS;
-      lock_release (&filesys_lock);
+      unlock_filesys ();
       return;
     }
 
@@ -369,7 +386,7 @@ handle_write (struct intr_frame *f)
 
   int bytes = file_write (file, buffer, size);
   f->eax = bytes;
-  lock_release (&filesys_lock);
+  unlock_filesys ();
 }
 
 /* Changes the next byte to be read or written in open file fd to position,
@@ -378,7 +395,7 @@ handle_write (struct intr_frame *f)
 static void
 handle_seek (struct intr_frame *f)
 {
-  lock_acquire (&filesys_lock);
+  lock_filesys ();
   int fd = (int) load_stack(f, ARG_1);
   int position = (int) load_stack(f, ARG_2);
   struct file *file = process_get_file (fd);
@@ -386,13 +403,13 @@ handle_seek (struct intr_frame *f)
   /* Do nothing if given invalid file descriptor. */
   if (file == NULL)
     {
-      lock_release (&filesys_lock);
+      unlock_filesys ();
       return;
     }
 
   /* Seek position in file. */
   file_seek (file, position);
-  lock_release (&filesys_lock);
+  unlock_filesys ();
 }
 
 /* Returns the position of the next byte to be read or written in open file fd,
@@ -400,7 +417,7 @@ handle_seek (struct intr_frame *f)
 static void
 handle_tell (struct intr_frame *f)
 {
-  lock_acquire (&filesys_lock);
+  lock_filesys ();
   int fd = (int) load_stack(f, ARG_1);
   struct file *file = process_get_file (fd);
 
@@ -408,13 +425,13 @@ handle_tell (struct intr_frame *f)
   if (file == NULL)
     {
       f->eax = EXIT_FAILURE;
-      lock_release (&filesys_lock);
+      unlock_filesys ();
       return;
     }
 
   /* Tell position of file. */
   f->eax = file_tell (file);
-  lock_release (&filesys_lock);
+  unlock_filesys ();
 }
 
 /* Closes file descriptor fd. Exiting or terminating a process implicitly
@@ -423,7 +440,7 @@ handle_tell (struct intr_frame *f)
 static void
 handle_close (struct intr_frame *f)
 {
-  lock_acquire (&filesys_lock);
+  lock_filesys ();
   int fd = (int) load_stack(f, ARG_1);
   struct process_info *info = thread_current ()->process_info;
   struct list_elem *e;
@@ -443,7 +460,7 @@ handle_close (struct intr_frame *f)
       free (pf);
       break;
     }
-  lock_release (&filesys_lock);
+  unlock_filesys ();
 }
 
 /* ---------------------------------------------------------

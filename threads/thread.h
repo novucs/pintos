@@ -145,6 +145,7 @@ struct thread
 
     /* Needed for file system sys calls. */
     struct child_process* child;
+    bool holding_filesys_lock;
   };
 
 /* If false (default), use round-robin scheduler.
