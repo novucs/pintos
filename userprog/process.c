@@ -1,3 +1,10 @@
+/*
+ * AUTHORS
+ * - William Randall 16002374 ( contact@novucs.net )
+ * - Gareth Perry 16014980 ( gareth2.perry@uwe.ac.uk, garethnperry@gmail.com )
+ * - Chris Taylor 16020794 ( christopherjamestaylor@outlook.com )
+ */
+
 #include "userprog/process.h"
 #include <debug.h>
 #include <inttypes.h>
